@@ -1,6 +1,17 @@
 # mcp-nvim
 
+<p align="center">
+  <a href="https://github.com/murphysean/mcp-nvim"><img src="https://img.shields.io/badge/github-murphysean/mcp--nvim-181717?style=flat&logo=github" alt="GitHub"></a>
+  <a href="https://github.com/neovim/neovim/releases/tag/stable"><img src="https://img.shields.io/badge/Neovim-0.11-90E59A?style=flat&logo=neovim&logoColor=white" alt="Neovim"></a>
+  <a href="https://github.com/murphysean/mcp-nvim/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat" alt="License"></a>
+  <a href="https://github.com/murphysean/mcp-nvim/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/murphysean/mcp-nvim/ci.yml?style=flat&logo=githubactions&label=stylua" alt="CI"></a>
+</p>
+
 A Neovim plugin that exposes a local MCP (Model Context Protocol) server over Streamable HTTP. External AI agents — Claude Code, Goose, Kiro CLI — connect to your running Neovim instance and get full access to buffers, LSP, navigation, diagnostics, and commands.
+
+## Requirements
+
+- **Neovim** ≥ 0.11
 
 ## Why
 
@@ -12,7 +23,7 @@ Instead of embedding an LLM inside Neovim, let external agents drive your editor
 
 ```lua
 {
-  "seanvelasco/mcp-nvim",
+  "murphysean/mcp-nvim",
   lazy = false,
   config = function()
     require("mcp-nvim").setup({
@@ -41,7 +52,7 @@ Instead of embedding an LLM inside Neovim, let external agents drive your editor
 
 ```lua
 use {
-  "seanvelasco/mcp-nvim",
+  "murphysean/mcp-nvim",
   config = function()
     require("mcp-nvim").setup()
   end,
