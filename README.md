@@ -138,12 +138,12 @@ kiro mcp add neovim --url http://127.0.0.1:3000/mcp
 
 ### Goose
 
-Add to your Goose profile configuration (`~/.config/goose/profiles.yaml`):
+Add to your Goose configuration (`~/.config/goose/config.yaml`):
 
 ```yaml
 extensions:
   neovim:
-    type: http
+    type: streamable_http
     uri: http://127.0.0.1:3000/mcp
 ```
 
@@ -151,7 +151,7 @@ Or add via CLI:
 
 ```bash
 goose configure
-# Select "Add Extension" → "HTTP" → name: neovim → url: http://127.0.0.1:3000/mcp
+# Select "Add Extension" → "Streamable HTTP" → url: http://127.0.0.1:3000/mcp
 ```
 
 ### Any MCP Client (Generic)
