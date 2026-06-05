@@ -23,7 +23,7 @@ function M.client_supports(capability)
   return M.client_capabilities[capability] ~= nil
 end
 
-function M.handle_jsonrpc(request_body, tool_registry, session_id)
+function M.handle_jsonrpc(request_body, tool_registry, session_id, respond_fn)
   local msg = json.decode(request_body)
   if not msg then
     return M.error_response(nil, -32700, "Parse error")
@@ -85,16 +85,32 @@ function M.handle_jsonrpc(request_body, tool_registry, session_id)
     local tool_name = params.name
     local arguments = params.arguments or {}
 
-    local ok, content, is_error = tool_registry.call_tool(tool_name, arguments)
-    if not ok then
-      return M.error_response(id, -32602, content)
+    local responded = false
+    local function respond_with(ok, content, is_error)
+      if responded then
+        return
+      end
+      responded = true
+      local response_body
+      if not ok then
+        response_body = M.error_response(id, -32602, content)
+      else
+        local call_result = { content = content }
+        if is_error then
+          call_result.isError = true
+        end
+        response_body = M.success_response(id, call_result)
+      end
+      if respond_fn then
+        respond_fn(response_body)
+      end
     end
 
-    local call_result = { content = content }
-    if is_error then
-      call_result.isError = true
+    local result = tool_registry.call_tool(tool_name, arguments, respond_with)
+    if result == "async" then
+      return "async"
     end
-    return M.success_response(id, call_result)
+    return nil
   end
 
   -- Resources

@@ -1,6 +1,13 @@
 local registry = require("mcp-nvim.mcp.registry")
 
 registry.register("terminal_open", {
+  annotations = {
+    title = "Open Terminal",
+    readOnlyHint = false,
+    destructiveHint = false,
+    idempotentHint = false,
+    openWorldHint = true,
+  },
   description = "Open a terminal in a split window",
   inputSchema = {
     type = "object",
@@ -65,6 +72,13 @@ registry.register("terminal_open", {
 end)
 
 registry.register("terminal_send", {
+  annotations = {
+    title = "Send to Terminal",
+    readOnlyHint = false,
+    destructiveHint = true,
+    idempotentHint = false,
+    openWorldHint = true,
+  },
   description = "Send keystrokes or text to a terminal buffer",
   inputSchema = {
     type = "object",
@@ -102,74 +116,4 @@ registry.register("terminal_send", {
 
   vim.api.nvim_chan_send(chan, text)
   return "Sent to terminal"
-end)
-
-registry.register("notify", {
-  description = "Show a notification message to the user in Neovim",
-  inputSchema = {
-    type = "object",
-    properties = {
-      message = {
-        type = "string",
-        description = "Message to display",
-      },
-      level = {
-        type = "string",
-        enum = { "info", "warn", "error" },
-        description = "Notification level. Default: info.",
-      },
-    },
-    required = { "message" },
-  },
-}, function(args)
-  local levels = {
-    info = vim.log.levels.INFO,
-    warn = vim.log.levels.WARN,
-    error = vim.log.levels.ERROR,
-  }
-  local level = levels[args.level or "info"]
-  vim.notify(args.message, level)
-  return "Notification sent"
-end)
-
-registry.register("nvim_info", {
-  description = "Get information about the current Neovim instance: version, cwd, loaded plugins, runtimepath",
-  inputSchema = {
-    type = "object",
-    properties = vim.empty_dict(),
-  },
-}, function(_)
-  local version = vim.version()
-  local result = {
-    version = string.format("%d.%d.%d", version.major, version.minor, version.patch),
-    cwd = vim.fn.getcwd(),
-    vimrc = vim.env.MYVIMRC or "",
-    plugins = {},
-  }
-
-  local packpath = vim.o.packpath
-  if packpath then
-    for _, path in ipairs(vim.split(packpath, ",")) do
-      local start_dir = path .. "/pack/*/start/*"
-      local opt_dir = path .. "/pack/*/opt/*"
-      for _, dir in ipairs(vim.fn.glob(start_dir, false, true)) do
-        table.insert(result.plugins, vim.fn.fnamemodify(dir, ":t"))
-      end
-      for _, dir in ipairs(vim.fn.glob(opt_dir, false, true)) do
-        table.insert(result.plugins, vim.fn.fnamemodify(dir, ":t") .. " (opt)")
-      end
-    end
-  end
-
-  -- Also check lazy.nvim if available
-  local lazy_ok, lazy = pcall(require, "lazy")
-  if lazy_ok then
-    result.plugins = {}
-    local plugins = lazy.plugins()
-    for _, plugin in ipairs(plugins) do
-      table.insert(result.plugins, plugin.name or plugin[1])
-    end
-  end
-
-  return vim.json.encode(result)
 end)

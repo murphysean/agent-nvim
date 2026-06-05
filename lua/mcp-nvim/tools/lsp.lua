@@ -9,6 +9,11 @@ local function get_offset_encoding()
 end
 
 registry.register("lsp_get_clients", {
+  annotations = {
+    title = "List LSP Clients",
+    readOnlyHint = true,
+    openWorldHint = false,
+  },
   description = "List active LSP clients attached to the current buffer",
   inputSchema = {
     type = "object",
@@ -31,6 +36,13 @@ registry.register("lsp_get_clients", {
 end)
 
 registry.register("lsp_goto_definition", {
+  annotations = {
+    title = "Go to Definition",
+    readOnlyHint = false,
+    destructiveHint = false,
+    idempotentHint = true,
+    openWorldHint = false,
+  },
   description = "Go to the definition of the symbol under the cursor or at a given position",
   inputSchema = {
     type = "object",
@@ -88,6 +100,11 @@ registry.register("lsp_goto_definition", {
 end)
 
 registry.register("lsp_references", {
+  annotations = {
+    title = "Find References",
+    readOnlyHint = true,
+    openWorldHint = false,
+  },
   description = "Find all references to the symbol under the cursor",
   inputSchema = {
     type = "object",
@@ -147,6 +164,11 @@ registry.register("lsp_references", {
 end)
 
 registry.register("lsp_hover", {
+  annotations = {
+    title = "Get Hover Info",
+    readOnlyHint = true,
+    openWorldHint = false,
+  },
   description = "Get hover information (type info, docs) for the symbol at a position",
   inputSchema = {
     type = "object",
@@ -199,6 +221,11 @@ registry.register("lsp_hover", {
 end)
 
 registry.register("lsp_symbols", {
+  annotations = {
+    title = "Document Symbols",
+    readOnlyHint = true,
+    openWorldHint = false,
+  },
   description = "Get document symbols (functions, classes, variables, etc.) from the current buffer",
   inputSchema = {
     type = "object",
@@ -279,6 +306,11 @@ registry.register("lsp_symbols", {
 end)
 
 registry.register("lsp_workspace_symbols", {
+  annotations = {
+    title = "Workspace Symbols",
+    readOnlyHint = true,
+    openWorldHint = false,
+  },
   description = "Search for symbols across the entire workspace/project",
   inputSchema = {
     type = "object",
@@ -350,6 +382,13 @@ registry.register("lsp_workspace_symbols", {
 end)
 
 registry.register("lsp_rename", {
+  annotations = {
+    title = "Rename Symbol",
+    readOnlyHint = false,
+    destructiveHint = true,
+    idempotentHint = true,
+    openWorldHint = false,
+  },
   description = "Rename a symbol across the project using LSP",
   inputSchema = {
     type = "object",
@@ -402,6 +441,13 @@ registry.register("lsp_rename", {
 end)
 
 registry.register("lsp_code_actions", {
+  annotations = {
+    title = "Code Actions",
+    readOnlyHint = false,
+    destructiveHint = true,
+    idempotentHint = false,
+    openWorldHint = false,
+  },
   description = "Get available code actions at the current position or for a selection",
   inputSchema = {
     type = "object",

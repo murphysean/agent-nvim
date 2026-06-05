@@ -5,6 +5,7 @@ M.config = {
   port = 3000,
   auto_start = true,
   allow_code_execution = true,
+  review_edits = true,
   log_level = "info",
 }
 

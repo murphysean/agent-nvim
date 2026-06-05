@@ -1,6 +1,13 @@
 local registry = require("mcp-nvim.mcp.registry")
 
 registry.register("quickfix_set", {
+  annotations = {
+    title = "Set Quickfix List",
+    readOnlyHint = false,
+    destructiveHint = false,
+    idempotentHint = true,
+    openWorldHint = false,
+  },
   description = "Set the quickfix list with a set of locations. Useful for presenting search results, errors, or any list of file positions the user should visit.",
   inputSchema = {
     type = "object",
@@ -56,6 +63,11 @@ registry.register("quickfix_set", {
 end)
 
 registry.register("quickfix_get", {
+  annotations = {
+    title = "Get Quickfix List",
+    readOnlyHint = true,
+    openWorldHint = false,
+  },
   description = "Get the current quickfix list contents",
   inputSchema = {
     type = "object",
@@ -87,6 +99,13 @@ registry.register("quickfix_get", {
 end)
 
 registry.register("loclist_set", {
+  annotations = {
+    title = "Set Location List",
+    readOnlyHint = false,
+    destructiveHint = false,
+    idempotentHint = true,
+    openWorldHint = false,
+  },
   description = "Set the location list for the current window",
   inputSchema = {
     type = "object",

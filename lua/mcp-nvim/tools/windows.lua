@@ -1,6 +1,11 @@
 local registry = require("mcp-nvim.mcp.registry")
 
 registry.register("window_list", {
+  annotations = {
+    title = "List Windows",
+    readOnlyHint = true,
+    openWorldHint = false,
+  },
   description = "List all windows in the current tab with their buffer info and cursor positions",
   inputSchema = {
     type = "object",
@@ -31,6 +36,13 @@ registry.register("window_list", {
 end)
 
 registry.register("window_split", {
+  annotations = {
+    title = "Split Window",
+    readOnlyHint = false,
+    destructiveHint = false,
+    idempotentHint = false,
+    openWorldHint = false,
+  },
   description = "Split the current window horizontally or vertically, optionally opening a file",
   inputSchema = {
     type = "object",
@@ -64,6 +76,13 @@ registry.register("window_split", {
 end)
 
 registry.register("window_close", {
+  annotations = {
+    title = "Close Window",
+    readOnlyHint = false,
+    destructiveHint = false,
+    idempotentHint = true,
+    openWorldHint = false,
+  },
   description = "Close a window by ID",
   inputSchema = {
     type = "object",
@@ -81,6 +100,11 @@ registry.register("window_close", {
 end)
 
 registry.register("tab_list", {
+  annotations = {
+    title = "List Tabs",
+    readOnlyHint = true,
+    openWorldHint = false,
+  },
   description = "List all tab pages with their window count and current buffer",
   inputSchema = {
     type = "object",

@@ -6,6 +6,13 @@ local function code_execution_allowed()
 end
 
 registry.register("nvim_exec", {
+  annotations = {
+    title = "Execute Ex Command",
+    readOnlyHint = false,
+    destructiveHint = true,
+    idempotentHint = false,
+    openWorldHint = true,
+  },
   description = "Execute a Neovim Ex command (like typing ':' followed by a command). Returns the output. WARNING: executes arbitrary code with full system access. Disable with allow_code_execution = false.",
   inputSchema = {
     type = "object",
@@ -26,6 +33,13 @@ registry.register("nvim_exec", {
 end)
 
 registry.register("nvim_eval", {
+  annotations = {
+    title = "Evaluate Vimscript",
+    readOnlyHint = false,
+    destructiveHint = true,
+    idempotentHint = false,
+    openWorldHint = true,
+  },
   description = "Evaluate a Vimscript expression and return the result. WARNING: can execute arbitrary code via system(). Disable with allow_code_execution = false.",
   inputSchema = {
     type = "object",
@@ -49,6 +63,13 @@ registry.register("nvim_eval", {
 end)
 
 registry.register("lua_exec", {
+  annotations = {
+    title = "Execute Lua Code",
+    readOnlyHint = false,
+    destructiveHint = true,
+    idempotentHint = false,
+    openWorldHint = true,
+  },
   description = "Execute Lua code in the Neovim Lua runtime with full access to vim.api, vim.fn, io, os, etc. Return a value by assigning to a local 'result' variable. WARNING: unsandboxed arbitrary code execution. Disable with allow_code_execution = false.",
   inputSchema = {
     type = "object",
@@ -82,6 +103,11 @@ registry.register("lua_exec", {
 end)
 
 registry.register("keymap_list", {
+  annotations = {
+    title = "List Keymaps",
+    readOnlyHint = true,
+    openWorldHint = false,
+  },
   description = "List keymaps for a given mode",
   inputSchema = {
     type = "object",
@@ -120,6 +146,11 @@ registry.register("keymap_list", {
 end)
 
 registry.register("user_command_list", {
+  annotations = {
+    title = "List Commands",
+    readOnlyHint = true,
+    openWorldHint = false,
+  },
   description = "List available user-defined commands",
   inputSchema = {
     type = "object",
@@ -152,6 +183,11 @@ registry.register("user_command_list", {
 end)
 
 registry.register("option_get", {
+  annotations = {
+    title = "Get Option",
+    readOnlyHint = true,
+    openWorldHint = false,
+  },
   description = "Get the value of a Neovim option",
   inputSchema = {
     type = "object",
@@ -181,6 +217,13 @@ registry.register("option_get", {
 end)
 
 registry.register("option_set", {
+  annotations = {
+    title = "Set Option",
+    readOnlyHint = false,
+    destructiveHint = false,
+    idempotentHint = true,
+    openWorldHint = false,
+  },
   description = "Set a Neovim option value",
   inputSchema = {
     type = "object",
@@ -210,4 +253,85 @@ registry.register("option_set", {
 
   vim.api.nvim_set_option_value(args.name, args.value, opts)
   return string.format("Option '%s' set to %s", args.name, vim.inspect(args.value))
+end)
+
+registry.register("notify", {
+  annotations = {
+    title = "Show Notification",
+    readOnlyHint = false,
+    destructiveHint = false,
+    idempotentHint = false,
+    openWorldHint = false,
+  },
+  description = "Show a notification message to the user in Neovim",
+  inputSchema = {
+    type = "object",
+    properties = {
+      message = {
+        type = "string",
+        description = "Message to display",
+      },
+      level = {
+        type = "string",
+        enum = { "info", "warn", "error" },
+        description = "Notification level. Default: info.",
+      },
+    },
+    required = { "message" },
+  },
+}, function(args)
+  local levels = {
+    info = vim.log.levels.INFO,
+    warn = vim.log.levels.WARN,
+    error = vim.log.levels.ERROR,
+  }
+  local level = levels[args.level or "info"]
+  vim.notify(args.message, level)
+  return "Notification sent"
+end)
+
+registry.register("nvim_info", {
+  annotations = {
+    title = "Neovim Info",
+    readOnlyHint = true,
+    openWorldHint = false,
+  },
+  description = "Get information about the current Neovim instance: version, cwd, loaded plugins, runtimepath",
+  inputSchema = {
+    type = "object",
+    properties = vim.empty_dict(),
+  },
+}, function(_)
+  local version = vim.version()
+  local result = {
+    version = string.format("%d.%d.%d", version.major, version.minor, version.patch),
+    cwd = vim.fn.getcwd(),
+    vimrc = vim.env.MYVIMRC or "",
+    plugins = {},
+  }
+
+  local packpath = vim.o.packpath
+  if packpath then
+    for _, path in ipairs(vim.split(packpath, ",")) do
+      local start_dir = path .. "/pack/*/start/*"
+      local opt_dir = path .. "/pack/*/opt/*"
+      for _, dir in ipairs(vim.fn.glob(start_dir, false, true)) do
+        table.insert(result.plugins, vim.fn.fnamemodify(dir, ":t"))
+      end
+      for _, dir in ipairs(vim.fn.glob(opt_dir, false, true)) do
+        table.insert(result.plugins, vim.fn.fnamemodify(dir, ":t") .. " (opt)")
+      end
+    end
+  end
+
+  local lazy_ok, lazy = pcall(require, "lazy")
+  if lazy_ok then
+    result.plugins = {}
+    local plugins = lazy.plugins()
+    for _, plugin in ipairs(plugins) do
+      table.insert(result.plugins, plugin.name or plugin[1])
+    end
+  end
+
+  return vim.json.encode(result)
 end)

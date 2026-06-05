@@ -105,28 +105,36 @@ local function handle_request(request, conn)
   -- POST /mcp — JSON-RPC request
   local session_id = request.headers["mcp-session-id"]
 
-  local response_body = protocol.handle_jsonrpc(request.body, registry, session_id)
-
-  -- Notifications return nil — no response needed
-  if not response_body then
-    conn:respond(202, cors, "")
-    return
-  end
-
-  -- Always respond with plain JSON for RPC calls.
-  -- SSE is only used for the GET notification stream.
-  local headers = merge_headers(cors, {
-    ["Content-Type"] = "application/json",
-  })
-
   if not session_id then
     local bytes = vim.loop.random(16) or string.rep("\0", 16)
     session_id = bytes:gsub(".", function(c)
       return string.format("%02x", c:byte())
     end)
   end
-  headers["Mcp-Session-Id"] = session_id
-  conn:respond(200, headers, response_body)
+
+  local function send_response(response_body)
+    if not conn:is_alive() then
+      return
+    end
+    local headers = merge_headers(cors, {
+      ["Content-Type"] = "application/json",
+      ["Mcp-Session-Id"] = session_id,
+    })
+    conn:respond(200, headers, response_body)
+  end
+
+  local response_body = protocol.handle_jsonrpc(request.body, registry, session_id, send_response)
+
+  if response_body == "async" then
+    return
+  end
+
+  if not response_body then
+    conn:respond(202, cors, "")
+    return
+  end
+
+  send_response(response_body)
 end
 
 function M.start(host, port)
