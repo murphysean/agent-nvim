@@ -1,5 +1,23 @@
 local registry = require("mcp-nvim.mcp.registry")
 
+local function has_nvchad_term()
+  local ok, term = pcall(require, "nvchad.term")
+  if ok then
+    return term
+  end
+  return nil
+end
+
+local function nvchad_pos(direction)
+  if direction == "vertical" then
+    return "vsp"
+  elseif direction == "float" then
+    return "float"
+  else
+    return "sp"
+  end
+end
+
 registry.register("terminal_open", {
   annotations = {
     title = "Open Terminal",
@@ -29,6 +47,21 @@ registry.register("terminal_open", {
   },
 }, function(args)
   local direction = args.direction or "horizontal"
+  local nvterm = has_nvchad_term()
+
+  if nvterm then
+    local opts = {
+      id = "mcp_term_" .. nvchad_pos(direction),
+      pos = nvchad_pos(direction),
+    }
+    if args.command then
+      opts.cmd = args.command
+    end
+    nvterm.toggle(opts)
+    local bufnr = vim.api.nvim_get_current_buf()
+    local chan = vim.bo[bufnr].channel
+    return vim.json.encode({ bufnr = bufnr, channel = chan })
+  end
 
   if direction == "tab" then
     vim.cmd("tabnew")

@@ -98,7 +98,12 @@ function M.show_diff(bufnr, start_line, old_lines, new_lines, on_decision)
 
   local header_id = vim.api.nvim_buf_set_extmark(bufnr, ns, start_line - 1, 0, {
     virt_lines = {
-      { { string.format("─── MCP Edit: %d removed, %d added ───", removed_count, added_count), "McpReviewInfo" } },
+      {
+        {
+          string.format("─── MCP Edit: %d removed, %d added ───", removed_count, added_count),
+          "McpReviewInfo",
+        },
+      },
     },
     virt_lines_above = true,
   })

@@ -254,10 +254,16 @@ registry.register("edit_file", {
           if final_content == proposed_content then
             resolve(string.format("Edited %s at line %d. User accepted as proposed.", rel_path, start_line))
           else
-            resolve(string.format(
-              "Edited %s at line %d. User modified the edit. Final content at lines %d-%d:\n%s",
-              rel_path, start_line, start_line, end_line, final_content
-            ))
+            resolve(
+              string.format(
+                "Edited %s at line %d. User modified the edit. Final content at lines %d-%d:\n%s",
+                rel_path,
+                start_line,
+                start_line,
+                end_line,
+                final_content
+              )
+            )
           end
         end,
       })
@@ -361,7 +367,9 @@ registry.register("write_file", {
           if final_content == proposed_content then
             resolve(string.format("Written %s (%d lines). User accepted as proposed.", rel_path, #new_lines))
           else
-            resolve(string.format("Written %s. User modified the content. Final file (%d lines).", rel_path, #final_lines))
+            resolve(
+              string.format("Written %s. User modified the content. Final file (%d lines).", rel_path, #final_lines)
+            )
           end
         end,
       })
@@ -577,6 +585,38 @@ registry.register("search_files", {
       error(err)
     end
     search_dir = resolved
+  end
+
+  if vim.fn.executable("rg") == 1 then
+    local cmd = { "rg", "--no-heading", "--line-number", "--color=never", "--fixed-strings" }
+    if args.glob then
+      table.insert(cmd, "--glob")
+      table.insert(cmd, args.glob)
+    end
+    table.insert(cmd, "--")
+    table.insert(cmd, args.pattern)
+    table.insert(cmd, search_dir)
+
+    local rg_result = vim.system(cmd, { text = true, timeout = 15000 }):wait()
+    local results = {}
+
+    if rg_result.stdout and rg_result.stdout ~= "" then
+      for line in rg_result.stdout:gmatch("[^\n]+") do
+        local file, lnum, text = line:match("^(.+):(%d+):(.*)$")
+        if file then
+          if file:sub(1, #workspace) == workspace then
+            file = file:sub(#workspace + 2)
+          end
+          table.insert(results, {
+            file = file,
+            line = tonumber(lnum),
+            text = text,
+          })
+        end
+      end
+    end
+
+    return vim.json.encode(results)
   end
 
   local glob = args.glob or "**/*"

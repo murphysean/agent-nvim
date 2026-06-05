@@ -51,92 +51,6 @@ registry.register("cursor_set", {
   return "Cursor moved to line " .. args.line .. ", column " .. (args.column or 1)
 end)
 
-registry.register("jumplist_set", {
-  annotations = {
-    title = "Set Jump List",
-    readOnlyHint = false,
-    destructiveHint = false,
-    idempotentHint = true,
-    openWorldHint = false,
-  },
-  description = "Set the jump list to a series of locations. The user can then navigate these with Ctrl-O / Ctrl-I. This is ideal for guiding a user through a code path.",
-  inputSchema = {
-    type = "object",
-    properties = {
-      locations = {
-        type = "array",
-        description = "Ordered list of locations to add to the jump list",
-        items = {
-          type = "object",
-          properties = {
-            file = { type = "string", description = "File path" },
-            line = { type = "integer", description = "Line number (1-indexed)" },
-            column = { type = "integer", description = "Column (1-indexed). Default 1." },
-          },
-          required = { "file", "line" },
-        },
-      },
-    },
-    required = { "locations" },
-  },
-}, function(args)
-  vim.cmd("clearjumps")
-
-  for _, loc in ipairs(args.locations) do
-    vim.cmd("edit " .. vim.fn.fnameescape(loc.file))
-    local line = math.min(loc.line, vim.api.nvim_buf_line_count(0))
-    vim.cmd("normal! " .. line .. "G")
-    if loc.column and loc.column > 1 then
-      vim.cmd("normal! " .. (loc.column - 1) .. "l")
-    end
-  end
-
-  if #args.locations > 0 then
-    local first = args.locations[1]
-    vim.cmd("edit " .. vim.fn.fnameescape(first.file))
-    local line = math.min(first.line, vim.api.nvim_buf_line_count(0))
-    vim.cmd("normal! " .. line .. "G")
-  end
-
-  return string.format("Jump list set with %d locations. Use Ctrl-O to step back through them.", #args.locations)
-end)
-
-registry.register("jumplist_get", {
-  annotations = {
-    title = "Get Jump List",
-    readOnlyHint = true,
-    openWorldHint = false,
-  },
-  description = "Get the current jump list contents",
-  inputSchema = {
-    type = "object",
-    properties = vim.empty_dict(),
-  },
-}, function(_)
-  local jumplist = vim.fn.getjumplist()
-  local jumps = jumplist[1]
-  local current_pos = jumplist[2]
-
-  local result = {}
-  for _, jump in ipairs(jumps) do
-    local bufnr = jump.bufnr
-    local name = ""
-    if bufnr and vim.api.nvim_buf_is_valid(bufnr) then
-      name = vim.api.nvim_buf_get_name(bufnr)
-    end
-    table.insert(result, {
-      file = name,
-      line = jump.lnum,
-      column = jump.col + 1,
-    })
-  end
-
-  return vim.json.encode({
-    jumps = result,
-    current_index = current_pos,
-  })
-end)
-
 registry.register("search", {
   annotations = {
     title = "Search Buffer",
@@ -258,4 +172,3 @@ registry.register("mark_get", {
 
   return vim.json.encode(marks)
 end)
-

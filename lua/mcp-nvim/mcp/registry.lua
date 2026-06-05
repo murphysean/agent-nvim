@@ -113,7 +113,8 @@ function M.call_tool(name, arguments, callback)
 
   local ok, result = pcall(tool.handler, arguments)
   if not ok then
-    local err_result = { true, { { type = "text", text = string.format("Error in %s: %s", name, tostring(result)) } }, true }
+    local err_result =
+      { true, { { type = "text", text = string.format("Error in %s: %s", name, tostring(result)) } }, true }
     if callback then
       callback(unpack(err_result))
       return
