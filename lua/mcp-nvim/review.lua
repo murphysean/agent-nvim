@@ -11,19 +11,21 @@ local function setup_highlights()
   end)
 
   if ok and palette_ok and palette then
-    local darken = base46_colors.change_hex_lightness
+    local mix = base46_colors.mix
     local green = palette.green or "#a3be8c"
+    local vibrant_green = palette.vibrant_green or green
     local red = palette.red or "#cc6666"
+    local baby_pink = palette.baby_pink or red
     local grey = palette.grey or "#888888"
     local bg = palette.black or "#1e1e1e"
 
-    vim.api.nvim_set_hl(0, "McpReviewAdd", { bg = darken(green, -60), fg = green })
-    vim.api.nvim_set_hl(0, "McpReviewAddEmph", { bg = darken(green, -40), fg = darken(green, 20), bold = true })
-    vim.api.nvim_set_hl(0, "McpReviewDel", { bg = darken(red, -60) })
-    vim.api.nvim_set_hl(0, "McpReviewDelEmph", { bg = darken(red, -40), fg = darken(red, 20), bold = true })
+    vim.api.nvim_set_hl(0, "McpReviewAdd", { bg = mix(green, bg, 80), fg = green })
+    vim.api.nvim_set_hl(0, "McpReviewAddEmph", { bg = mix(green, bg, 65), fg = vibrant_green, bold = true })
+    vim.api.nvim_set_hl(0, "McpReviewDel", { bg = mix(red, bg, 80) })
+    vim.api.nvim_set_hl(0, "McpReviewDelEmph", { bg = mix(red, bg, 65), fg = baby_pink, bold = true })
     vim.api.nvim_set_hl(0, "McpReviewDelText", { fg = red })
     vim.api.nvim_set_hl(0, "McpReviewInfo", { fg = grey, italic = true })
-    vim.api.nvim_set_hl(0, "McpReviewContext", { fg = darken(grey, -20) })
+    vim.api.nvim_set_hl(0, "McpReviewContext", { fg = mix(grey, bg, 50) })
   else
     vim.api.nvim_set_hl(0, "McpReviewAdd", { bg = "#1a3a1a", fg = "#a3be8c", default = true })
     vim.api.nvim_set_hl(0, "McpReviewAddEmph", { bg = "#2e5c2e", fg = "#b5cea8", bold = true, default = true })
@@ -230,7 +232,6 @@ function M.show_diff(bufnr, start_line, old_lines, new_lines, on_decision)
         for ni, line in ipairs(hunk.new_lines) do
           local old_counterpart = hunk.old_lines[ni]
           local chunks = intra_line_chunks(line, old_counterpart, "McpReviewAdd", "McpReviewAddEmph")
-          table.insert(chunks, 1, { "+ ", "McpReviewAddEmph" })
           table.insert(virt, chunks)
         end
         local anchor = start_line + hunk.old_start + #hunk.old_lines - 3
