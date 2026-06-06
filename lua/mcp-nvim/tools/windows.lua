@@ -59,6 +59,7 @@ registry.register("window_split", {
     },
   },
 }, function(args)
+  require("mcp-nvim.util").ensure_code_window()
   local direction = args.direction or "horizontal"
   local cmd = direction == "vertical" and "vsplit" or "split"
 

@@ -139,6 +139,7 @@ registry.register("buffer_open", {
     required = { "file" },
   },
 }, function(args)
+  require("mcp-nvim.util").ensure_code_window()
   vim.api.nvim_cmd({ cmd = "edit", args = { args.file } }, {})
   local bufnr = vim.api.nvim_get_current_buf()
 

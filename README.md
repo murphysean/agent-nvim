@@ -66,7 +66,8 @@ require("mcp-nvim").setup({
   host = "127.0.0.1",           -- Listen address
   port = 3000,                  -- Listen port
   auto_start = true,            -- Start server when Neovim launches
-  allow_code_execution = true,  -- Enable lua_exec, nvim_exec, nvim_eval (set false to disable)
+  allow_code_execution = true,  -- Enable lua_exec, nvim_exec, nvim_eval, run (set false to disable)
+  review_edits = true,          -- Show diff review UI before applying edit_file/write_file
   log_level = "info",           -- Event broadcast level: "debug", "info", "warning", "error"
 })
 ```
@@ -113,7 +114,7 @@ Add to `.claude/settings.json` in your project root:
 claude mcp list
 ```
 
-You should see `neovim` with status "connected" and all 48 tools listed.
+You should see `neovim` with status "connected" and all 43 tools listed.
 
 ### Kiro CLI
 
@@ -167,7 +168,7 @@ The server speaks standard MCP over Streamable HTTP. Any client that supports th
 
 | Capability   | Status | Notes |
 |-------------|--------|-------|
-| Tools        | 48 tools | Full editor control |
+| Tools        | 43 tools | Full editor control |
 | Resources    | 17 static + 3 templates | Live editor state with subscriptions |
 | Prompts      | 5 prompts | Context-rich agent instructions |
 | Completions  | Supported | Autocomplete for resource URIs and prompt args |
@@ -183,20 +184,22 @@ The server speaks standard MCP over Streamable HTTP. Any client that supports th
 - `buffer_open` — Open a file
 - `buffer_close` — Close a buffer
 
+### Files
+- `read_file` — Read a file with line numbers (workspace-scoped)
+- `edit_file` — Find-and-replace edit with interactive review
+- `write_file` — Create or overwrite a file
+- `list_files` — List files and directories
+- `search_files` — Search text across workspace (uses ripgrep)
+- `run` — Execute a shell command
+- `diagnostics` — Get LSP diagnostics for workspace or a file
+
 ### Editing
-- `buffer_set_lines` — Replace line ranges
-- `buffer_set_text` — Replace arbitrary text ranges
-- `buffer_insert` — Insert at cursor
-- `buffer_replace_file` — Replace entire buffer content
-- `buffer_save` — Write to disk
-- `undo` / `redo`
+- `buffer_edit` — Find-and-replace within a buffer (in-memory)
 
 ### Navigation
 - `cursor_get` / `cursor_set` — Read/move cursor
-- `jumplist_set` — Load a code path as a jump list (navigate with Ctrl-I/O)
-- `jumplist_get` — Read current jump list
 - `search` — Search current buffer
-- `grep_workspace` — Search across workspace files
+- `mark_set` / `mark_get` — Named marks (a-z local, A-Z global)
 
 ### LSP
 - `lsp_goto_definition` — Jump to definition
@@ -208,10 +211,6 @@ The server speaks standard MCP over Streamable HTTP. Any client that supports th
 - `lsp_code_actions` — Get/apply code actions
 - `lsp_get_clients` — List active LSP clients
 
-### Diagnostics
-- `diagnostics_get` — Get errors/warnings
-- `diagnostics_next` — Jump to next diagnostic
-
 ### Quickfix & Location Lists
 - `quickfix_set` / `quickfix_get` — Populate quickfix with results
 - `loclist_set` — Populate location list
@@ -221,10 +220,6 @@ The server speaks standard MCP over Streamable HTTP. Any client that supports th
 - `window_split` — Split windows
 - `window_close` — Close a window
 - `tab_list` — List tabs
-
-### Marks & Folds
-- `mark_set` / `mark_get` — Named marks
-- `fold_toggle` — Fold management
 
 ### Terminal
 - `terminal_open` — Open an integrated terminal
@@ -325,7 +320,7 @@ The plugin uses Neovim's built-in libuv bindings (`vim.loop`) to run an HTTP ser
 
 - The server only listens on localhost by default
 - CORS is restricted to localhost origins (no arbitrary web page access)
-- `lua_exec`, `nvim_exec`, and `nvim_eval` execute arbitrary code — disable with `allow_code_execution = false`
+- `lua_exec`, `nvim_exec`, `nvim_eval`, and `run` execute arbitrary code — disable with `allow_code_execution = false`
 - No authentication (any local process can connect) — suitable for single-user development machines
 
 ## License

@@ -58,6 +58,7 @@ registry.register("lsp_goto_definition", {
     },
   },
 }, function(args)
+  require("mcp-nvim.util").ensure_code_window()
   if args.line then
     local col = (args.column or 1) - 1
     vim.api.nvim_win_set_cursor(0, { args.line, col })
@@ -120,6 +121,7 @@ registry.register("lsp_references", {
     },
   },
 }, function(args)
+  require("mcp-nvim.util").ensure_code_window()
   if args.line then
     local col = (args.column or 1) - 1
     vim.api.nvim_win_set_cursor(0, { args.line, col })
@@ -184,6 +186,7 @@ registry.register("lsp_hover", {
     },
   },
 }, function(args)
+  require("mcp-nvim.util").ensure_code_window()
   if args.line then
     local col = (args.column or 1) - 1
     vim.api.nvim_win_set_cursor(0, { args.line, col })
@@ -409,6 +412,7 @@ registry.register("lsp_rename", {
     required = { "new_name" },
   },
 }, function(args)
+  require("mcp-nvim.util").ensure_code_window()
   if args.line then
     local col = (args.column or 1) - 1
     vim.api.nvim_win_set_cursor(0, { args.line, col })
@@ -463,6 +467,7 @@ registry.register("lsp_code_actions", {
     },
   },
 }, function(args)
+  require("mcp-nvim.util").ensure_code_window()
   if args.line then
     vim.api.nvim_win_set_cursor(0, { args.line, 0 })
   end

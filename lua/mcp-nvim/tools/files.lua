@@ -224,6 +224,7 @@ registry.register("edit_file", {
 
   local review = require("mcp-nvim.review")
 
+  require("mcp-nvim.util").ensure_code_window(bufnr)
   vim.api.nvim_set_current_buf(bufnr)
   vim.api.nvim_win_set_cursor(0, { start_line, 0 })
   vim.cmd("normal! zz")
@@ -340,6 +341,7 @@ registry.register("write_file", {
   local old_lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
   local review = require("mcp-nvim.review")
 
+  require("mcp-nvim.util").ensure_code_window(bufnr)
   vim.api.nvim_set_current_buf(bufnr)
   vim.api.nvim_win_set_cursor(0, { 1, 0 })
 

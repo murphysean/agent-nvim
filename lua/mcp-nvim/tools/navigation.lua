@@ -46,6 +46,7 @@ registry.register("cursor_set", {
     required = { "line" },
   },
 }, function(args)
+  require("mcp-nvim.util").ensure_code_window()
   local col = (args.column or 1) - 1
   vim.api.nvim_win_set_cursor(0, { args.line, col })
   return "Cursor moved to line " .. args.line .. ", column " .. (args.column or 1)

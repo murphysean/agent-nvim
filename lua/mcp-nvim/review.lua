@@ -4,11 +4,117 @@ local ns = vim.api.nvim_create_namespace("mcp_review")
 
 local pending_review = nil
 
-vim.api.nvim_set_hl(0, "McpReviewAdd", { bg = "#1a3a1a", default = true })
-vim.api.nvim_set_hl(0, "McpReviewDel", { bg = "#3a1a1a", default = true })
-vim.api.nvim_set_hl(0, "McpReviewDelText", { fg = "#cc6666", strikethrough = true, default = true })
-vim.api.nvim_set_hl(0, "McpReviewInfo", { fg = "#888888", italic = true, default = true })
-vim.api.nvim_set_hl(0, "McpReviewContext", { fg = "#666666", default = true })
+local function setup_highlights()
+  local ok, base46_colors = pcall(require, "base46.colors")
+  local palette_ok, palette = pcall(function()
+    return require("base46").get_theme_tb("base_30")
+  end)
+
+  if ok and palette_ok and palette then
+    local mix = base46_colors.mix
+    local green = palette.green or "#a3be8c"
+    local vibrant_green = palette.vibrant_green or green
+    local red = palette.red or "#cc6666"
+    local baby_pink = palette.baby_pink or red
+    local grey = palette.grey or "#888888"
+    local bg = palette.black or "#1e1e1e"
+
+    vim.api.nvim_set_hl(0, "McpReviewAdd", { bg = mix(green, bg, 80), fg = green })
+    vim.api.nvim_set_hl(0, "McpReviewAddEmph", { bg = mix(green, bg, 65), fg = vibrant_green, bold = true })
+    vim.api.nvim_set_hl(0, "McpReviewDel", { bg = mix(red, bg, 80) })
+    vim.api.nvim_set_hl(0, "McpReviewDelEmph", { bg = mix(red, bg, 65), fg = baby_pink, bold = true })
+    vim.api.nvim_set_hl(0, "McpReviewDelText", { fg = red })
+    vim.api.nvim_set_hl(0, "McpReviewInfo", { fg = grey, italic = true })
+    vim.api.nvim_set_hl(0, "McpReviewContext", { fg = mix(grey, bg, 50) })
+  else
+    vim.api.nvim_set_hl(0, "McpReviewAdd", { bg = "#1a3a1a", fg = "#a3be8c", default = true })
+    vim.api.nvim_set_hl(0, "McpReviewAddEmph", { bg = "#2e5c2e", fg = "#b5cea8", bold = true, default = true })
+    vim.api.nvim_set_hl(0, "McpReviewDel", { bg = "#3a1a1a", default = true })
+    vim.api.nvim_set_hl(0, "McpReviewDelEmph", { bg = "#5a2d2d", fg = "#e8a3a3", bold = true, default = true })
+    vim.api.nvim_set_hl(0, "McpReviewDelText", { fg = "#cc6666", default = true })
+    vim.api.nvim_set_hl(0, "McpReviewInfo", { fg = "#888888", italic = true, default = true })
+    vim.api.nvim_set_hl(0, "McpReviewContext", { fg = "#666666", default = true })
+  end
+end
+
+setup_highlights()
+
+local function intra_line_chunks(line, old_line, hl_base, hl_emph)
+  if not old_line then
+    return { { line, hl_emph } }
+  end
+
+  local min_len = math.min(#line, #old_line)
+  local prefix_end = 0
+  for i = 1, min_len do
+    if line:sub(i, i) == old_line:sub(i, i) then
+      prefix_end = i
+    else
+      break
+    end
+  end
+
+  local suffix_start_line = #line + 1
+  local suffix_start_old = #old_line + 1
+  for i = 0, min_len - prefix_end - 1 do
+    if line:sub(#line - i, #line - i) == old_line:sub(#old_line - i, #old_line - i) then
+      suffix_start_line = #line - i
+      suffix_start_old = #old_line - i
+    else
+      break
+    end
+  end
+
+  if prefix_end >= suffix_start_line - 1 then
+    return { { line, hl_base } }
+  end
+
+  local chunks = {}
+  if prefix_end > 0 then
+    table.insert(chunks, { line:sub(1, prefix_end), hl_base })
+  end
+  table.insert(chunks, { line:sub(prefix_end + 1, suffix_start_line - 1), hl_emph })
+  if suffix_start_line <= #line then
+    table.insert(chunks, { line:sub(suffix_start_line), hl_base })
+  end
+  return chunks
+end
+
+local function wrap_chunks(chunks, width)
+  if width <= 0 then
+    return { chunks }
+  end
+  local rows = {}
+  local cur_row = {}
+  local col = 0
+  for _, chunk in ipairs(chunks) do
+    local text, hl = chunk[1], chunk[2]
+    while #text > 0 do
+      local remaining = width - col
+      if remaining <= 0 then
+        table.insert(rows, cur_row)
+        cur_row = {}
+        col = 0
+        remaining = width
+      end
+      if #text <= remaining then
+        table.insert(cur_row, { text, hl })
+        col = col + #text
+        text = ""
+      else
+        table.insert(cur_row, { text:sub(1, remaining), hl })
+        text = text:sub(remaining + 1)
+        table.insert(rows, cur_row)
+        cur_row = {}
+        col = 0
+      end
+    end
+  end
+  if #cur_row > 0 then
+    table.insert(rows, cur_row)
+  end
+  return rows
+end
 
 local function lcs(a, b)
   local m, n = #a, #b
@@ -126,12 +232,57 @@ function M.show_diff(bufnr, start_line, old_lines, new_lines, on_decision)
           line_hl_group = "McpReviewDel",
         })
         table.insert(extmark_ids, id)
+
+        local new_counterpart = hunk.new_lines[i]
+        if new_counterpart then
+          local buf_line = vim.api.nvim_buf_get_lines(bufnr, lnum, lnum + 1, false)[1] or ""
+          local min_len = math.min(#buf_line, #new_counterpart)
+          local prefix_end = 0
+          for ci = 1, min_len do
+            if buf_line:sub(ci, ci) == new_counterpart:sub(ci, ci) then
+              prefix_end = ci
+            else
+              break
+            end
+          end
+          local suffix_start_buf = #buf_line + 1
+          for ci = 0, min_len - prefix_end - 1 do
+            if
+              buf_line:sub(#buf_line - ci, #buf_line - ci)
+              == new_counterpart:sub(#new_counterpart - ci, #new_counterpart - ci)
+            then
+              suffix_start_buf = #buf_line - ci
+            else
+              break
+            end
+          end
+          if prefix_end < suffix_start_buf - 1 then
+            local emph_id = vim.api.nvim_buf_set_extmark(bufnr, ns, lnum, prefix_end, {
+              end_col = suffix_start_buf - 1,
+              hl_group = "McpReviewDelEmph",
+            })
+            table.insert(extmark_ids, emph_id)
+          end
+        end
       end
 
       if #hunk.new_lines > 0 then
         local virt = {}
-        for _, line in ipairs(hunk.new_lines) do
-          table.insert(virt, { { " " .. line, "McpReviewAdd" } })
+        local do_wrap = vim.wo.wrap
+        local win_width = do_wrap
+            and (vim.api.nvim_win_get_width(0) - vim.fn.getwininfo(vim.api.nvim_get_current_win())[1].textoff)
+          or 0
+        for ni, line in ipairs(hunk.new_lines) do
+          local old_counterpart = hunk.old_lines[ni]
+          local chunks = intra_line_chunks(line, old_counterpart, "McpReviewAdd", "McpReviewAddEmph")
+          if do_wrap then
+            local wrapped = wrap_chunks(chunks, win_width)
+            for _, row in ipairs(wrapped) do
+              table.insert(virt, row)
+            end
+          else
+            table.insert(virt, chunks)
+          end
         end
         local anchor = start_line + hunk.old_start + #hunk.old_lines - 3
         if #hunk.old_lines == 0 then
@@ -163,6 +314,8 @@ function M.show_diff(bufnr, start_line, old_lines, new_lines, on_decision)
     on_decision = on_decision,
   }
 
+  vim.notify("MCP: edit pending review — [a]ccept [A]lways [r]eject [R]eason [e]dit", vim.log.levels.INFO)
+
   local function cleanup()
     if not pending_review then
       return
@@ -174,6 +327,7 @@ function M.show_diff(bufnr, start_line, old_lines, new_lines, on_decision)
     pcall(vim.keymap.del, "n", "R", { buffer = bufnr })
     pcall(vim.keymap.del, "n", "e", { buffer = bufnr })
     pending_review = nil
+    vim.cmd("echo ''")
   end
 
   vim.keymap.set("n", "a", function()
