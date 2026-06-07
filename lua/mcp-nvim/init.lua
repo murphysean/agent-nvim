@@ -64,6 +64,17 @@ function M.setup(opts)
     vim.notify("Sampling request sent (waiting for client response...)", vim.log.levels.INFO)
   end, { desc = "Send a sampling/createMessage request to the MCP client", nargs = "?" })
 
+  vim.api.nvim_create_user_command("McpAutoComplete", function()
+    require("mcp-nvim.autocomplete").complete()
+  end, { desc = "AI-powered code completion at cursor via sampling" })
+
+  vim.keymap.set("n", "<leader>ac", function()
+    require("mcp-nvim.autocomplete").complete()
+  end, { desc = "AI code completion" })
+  vim.keymap.set("i", "<leader>ac", function()
+    require("mcp-nvim.autocomplete").complete()
+  end, { desc = "AI code completion" })
+
   if M.config.auto_start then
     vim.defer_fn(function()
       M.start()
