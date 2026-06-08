@@ -68,7 +68,28 @@ local function handle_request(request, conn)
       return
     end
 
-    local session = sessions.create(conn)
+    local session_id = request.headers["mcp-session-id"]
+    local session
+
+    if session_id then
+      -- Client claims an existing session — validate it.
+      session = sessions.get(session_id)
+      if not session then
+        conn:respond(
+          404,
+          merge_headers(cors, { ["Content-Type"] = "application/json" }),
+          json.encode({ error = "Session not found — please re-initialize" })
+        )
+        return
+      end
+      -- Attach (or re-attach) the SSE connection to the existing session.
+      sessions.attach_connection(session_id, conn)
+    else
+      -- No session header — create a fresh session with the SSE connection.
+      -- This supports clients that open SSE before or without POST initialize.
+      session = sessions.create(conn)
+    end
+
     conn:start_sse(merge_headers(cors, {
       ["Mcp-Session-Id"] = session.id,
     }))
@@ -78,9 +99,15 @@ local function handle_request(request, conn)
   -- DELETE /mcp — terminate session
   if request.method == "DELETE" then
     local session_id = request.headers["mcp-session-id"]
-    if session_id then
-      sessions.remove(session_id)
+    if not session_id or not sessions.get(session_id) then
+      conn:respond(
+        404,
+        merge_headers(cors, { ["Content-Type"] = "application/json" }),
+        json.encode({ error = "Session not found" })
+      )
+      return
     end
+    sessions.remove(session_id)
     conn:respond(
       200,
       merge_headers(cors, {
@@ -105,11 +132,24 @@ local function handle_request(request, conn)
   -- POST /mcp — JSON-RPC request
   local session_id = request.headers["mcp-session-id"]
 
-  if not session_id then
+  if session_id then
+    -- Client claims an existing session — validate it.
+    if not sessions.get(session_id) then
+      conn:respond(
+        404,
+        merge_headers(cors, { ["Content-Type"] = "application/json" }),
+        json.encode({ error = "Session not found — please re-initialize" })
+      )
+      return
+    end
+  else
+    -- First request (initialize) — generate the session ID and register it.
+    -- The SSE connection will be attached later via GET.
     local bytes = vim.loop.random(16) or string.rep("\0", 16)
     session_id = bytes:gsub(".", function(c)
       return string.format("%02x", c:byte())
     end)
+    sessions.create(nil, session_id)
   end
 
   local function send_response(response_body)
