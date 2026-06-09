@@ -15,6 +15,15 @@ function M.register_all()
   require("mcp-nvim.prompts.pr_review_tour")
   require("mcp-nvim.prompts.pr_review_report")
 
+  -- Simple task prompts — lightweight, client-driven alternatives for
+  -- common operations. These are exposed via prompts/list alongside the
+  -- workflow prompts above.
+  require("mcp-nvim.prompts.complete")
+  require("mcp-nvim.prompts.explain")
+  require("mcp-nvim.prompts.fix")
+  require("mcp-nvim.prompts.refactor")
+  require("mcp-nvim.prompts.review")
+
   -- Internal prompts (prefixed with _) are NOT registered here.
   -- They are used directly by our sampling/autocomplete system:
   --   _complete.lua  → used by autocomplete.lua and completion/blink.lua
