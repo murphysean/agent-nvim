@@ -25,7 +25,7 @@ local function log(level, message)
   sessions.broadcast("notifications/message", {
     level = level,
     logger = "neovim-mcp",
-    message = message,
+    data = message,
   })
 end
 

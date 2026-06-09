@@ -12,6 +12,8 @@ function M.register_all()
   require("mcp-nvim.prompts.diagnostic_repair")
   require("mcp-nvim.prompts.navigate")
   require("mcp-nvim.prompts.context_switch")
+  require("mcp-nvim.prompts.pr_review_tour")
+  require("mcp-nvim.prompts.pr_review_report")
 
   -- Internal prompts (prefixed with _) are NOT registered here.
   -- They are used directly by our sampling/autocomplete system:

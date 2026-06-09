@@ -100,12 +100,10 @@ function M.notify_resource_updated(uri)
 
   local dead = {}
   for id, session in pairs(sessions) do
-    if session.subscriptions[uri] then
-      if is_connected(session) then
-        session.connection:send_sse_event("message", notification)
-      elseif session.connection then
-        table.insert(dead, id)
-      end
+    if is_connected(session) then
+      session.connection:send_sse_event("message", notification)
+    elseif session.connection then
+      table.insert(dead, id)
     end
   end
 
