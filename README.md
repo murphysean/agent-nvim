@@ -201,10 +201,11 @@ goose configure
 | Capability   | Status | Notes |
 |-------------|--------|-------|
 | Tools        | 43 tools | Full editor control |
-| Resources    | 17 static + 3 templates | Live editor state with subscriptions |
-| Prompts      | 6 prompts | Neovim-specific agent workflows |
+| Resources    | 17 static + 3 templates | Live editor state with auto-subscriptions |
+| Prompts      | 8 prompts | Neovim-specific agent workflows |
 | Completions  | Supported | Autocomplete for resource URIs and prompt args |
 | Logging      | Supported | Editor events broadcast to connected clients |
+| Progress     | Supported | Real-time status during edit review (awaiting, reviewing, editing) |
 | Roots        | Supported | Stores client-declared project roots |
 | Sampling     | Supported | AI completion, explain, fix, refactor, review |
 
