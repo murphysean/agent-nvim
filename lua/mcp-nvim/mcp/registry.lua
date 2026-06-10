@@ -74,7 +74,7 @@ function M.list_tools()
   return result
 end
 
-function M.call_tool(name, arguments, callback)
+function M.call_tool(name, arguments, callback, progress_fn)
   local tool = tools[name]
   if not tool then
     local err_result = { false, "Unknown tool: " .. name }
@@ -104,7 +104,7 @@ function M.call_tool(name, arguments, callback)
       else
         callback(true, { { type = "text", text = tostring(result) } }, is_error or false)
       end
-    end)
+    end, progress_fn)
     if not ok then
       callback(true, { { type = "text", text = string.format("Error in %s: %s", name, tostring(call_err)) } }, true)
     end

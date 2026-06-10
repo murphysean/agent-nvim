@@ -186,7 +186,7 @@ local function compute_diff(old_lines, new_lines)
   return hunks
 end
 
-function M.show_diff(bufnr, start_line, old_lines, new_lines, on_decision)
+function M.show_diff(bufnr, start_line, old_lines, new_lines, on_decision, progress_fn)
   vim.api.nvim_set_current_buf(bufnr)
   vim.api.nvim_win_set_cursor(0, { start_line, 0 })
 
@@ -314,6 +314,42 @@ function M.show_diff(bufnr, start_line, old_lines, new_lines, on_decision)
     on_decision = on_decision,
   }
 
+  -- Emit progress notifications if client provided a progressToken
+  local progress_augroup = nil
+  local function emit(msg)
+    if progress_fn then
+      progress_fn(msg)
+    end
+  end
+
+  emit("Awaiting user review")
+
+  if progress_fn then
+    progress_augroup = vim.api.nvim_create_augroup("McpReviewProgress", { clear = true })
+    vim.api.nvim_create_autocmd("CursorHold", {
+      group = progress_augroup,
+      buffer = bufnr,
+      callback = function()
+        emit("User is reviewing changes")
+      end,
+    })
+    vim.api.nvim_create_autocmd("FocusGained", {
+      group = progress_augroup,
+      callback = function()
+        if pending_review and pending_review.bufnr == bufnr then
+          emit("User returned to review")
+        end
+      end,
+    })
+    vim.api.nvim_create_autocmd("InsertEnter", {
+      group = progress_augroup,
+      buffer = bufnr,
+      callback = function()
+        emit("User is editing the buffer")
+      end,
+    })
+  end
+
   vim.notify("MCP: edit pending review — [a]ccept [A]lways [r]eject [R]eason [e]dit", vim.log.levels.INFO)
 
   local function cleanup()
@@ -326,6 +362,10 @@ function M.show_diff(bufnr, start_line, old_lines, new_lines, on_decision)
     pcall(vim.keymap.del, "n", "r", { buffer = bufnr })
     pcall(vim.keymap.del, "n", "R", { buffer = bufnr })
     pcall(vim.keymap.del, "n", "e", { buffer = bufnr })
+    if progress_augroup then
+      pcall(vim.api.nvim_del_augroup_by_id, progress_augroup)
+      progress_augroup = nil
+    end
     pending_review = nil
     vim.cmd("echo ''")
   end

@@ -121,7 +121,7 @@ registry.register("edit_file", {
     },
     required = { "path", "old_string", "new_string" },
   },
-}, function(args, resolve)
+}, function(args, resolve, progress_fn)
   local config = require("mcp-nvim").config
   local filepath, err = resolve_path(args.path)
   if not filepath then
@@ -269,7 +269,7 @@ registry.register("edit_file", {
         end,
       })
     end
-  end)
+  end, progress_fn)
 end)
 
 registry.register("write_file", {
@@ -298,7 +298,7 @@ registry.register("write_file", {
     },
     required = { "path", "content" },
   },
-}, function(args, resolve)
+}, function(args, resolve, progress_fn)
   local config = require("mcp-nvim").config
   local filepath, err = resolve_path(args.path)
   if not filepath then
@@ -376,7 +376,7 @@ registry.register("write_file", {
         end,
       })
     end
-  end)
+  end, progress_fn)
 end)
 
 registry.register("run", {

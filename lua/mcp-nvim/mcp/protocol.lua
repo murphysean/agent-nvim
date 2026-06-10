@@ -139,6 +139,19 @@ function M.handle_jsonrpc(request_body, tool_registry, session_id, respond_fn)
     local tool_name = params.name
     local arguments = params.arguments or {}
 
+    -- Extract progressToken from _meta if provided by client
+    local progress_token = params._meta and params._meta.progressToken or nil
+    local progress_fn = nil
+    if progress_token and session_id then
+      progress_fn = function(message)
+        sessions.send_notification(session_id, "notifications/progress", {
+          progressToken = progress_token,
+          progress = 0,
+          message = message,
+        })
+      end
+    end
+
     local responded = false
     local function respond_with(ok, content, is_error)
       if responded then
@@ -164,7 +177,7 @@ function M.handle_jsonrpc(request_body, tool_registry, session_id, respond_fn)
       end
     end
 
-    local result = tool_registry.call_tool(tool_name, arguments, respond_with)
+    local result = tool_registry.call_tool(tool_name, arguments, respond_with, progress_fn)
     if result == "async" then
       return "async"
     end
