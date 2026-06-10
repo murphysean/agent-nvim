@@ -1,4 +1,5 @@
 local M = {}
+M.version = "1.0.0"
 
 M.config = {
   host = "127.0.0.1",
@@ -31,7 +32,8 @@ function M.setup(opts)
       local sess = require("mcp-nvim.sessions")
       vim.notify(
         string.format(
-          "MCP server running on http://%s:%d (%d active sessions)",
+          "MCP v%s server running on http://%s:%d (%d active sessions)",
+          M.version,
           M.config.host,
           M.config.port,
           sess.count()

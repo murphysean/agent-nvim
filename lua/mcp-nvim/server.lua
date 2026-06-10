@@ -194,8 +194,9 @@ function M.start(host, port)
   events.setup()
   sessions.start_ping()
 
+  local version = require("mcp-nvim").version or "unknown"
   server_handle = http.create_server(host, port, handle_request)
-  vim.notify(string.format("MCP server started on http://%s:%d/mcp", host, port), vim.log.levels.INFO)
+  vim.notify(string.format("MCP v%s started on http://%s:%d/mcp", version, host, port), vim.log.levels.INFO)
 end
 
 function M.stop()
