@@ -1,8 +1,7 @@
 --- Chat UI: a single bottom split that hosts whichever chat buffer is
 --- currently active. The buffer holds:
 ---   1. Streamed chat history (read-only above the prompt marker).
----   2. A "> " prompt line at the bottom that accepts user input. <CR> in
----      insert mode submits the prompt to the active session.
+---   2. A "> " prompt region at the bottom (multiline). <C-s> sends.
 ---
 --- Tool-call rendering: each tool_call notification appends a single status
 --- line ("⏳ Edit: lua/foo.lua") and stashes its line number in
@@ -19,6 +18,7 @@ local M = {}
 
 local NS = vim.api.nvim_create_namespace("mcp_chat_ui")
 local PROMPT_PREFIX = "> "
+local PROMPT_HINT = "   [C-s to send]"
 
 local STATUS_ICON = {
   pending = "○",
@@ -39,7 +39,82 @@ local KIND_ICON = {
   other = "",
 }
 
+--- Record a block boundary. Blocks shift as lines are inserted above them,
+--- so we store extmarks (which track through insertions) rather than raw
+--- line numbers. The blocks list is ordered by creation time.
+function M.add_block(chat, kind, row)
+  chat.blocks = chat.blocks or {}
+  local buf = chat.buf
+  if not vim.api.nvim_buf_is_valid(buf) then
+    return
+  end
+  local mark_id = vim.api.nvim_buf_set_extmark(buf, NS, row, 0, {})
+  table.insert(chat.blocks, { kind = kind, mark = mark_id })
+end
+
+--- Get the (0-indexed) line of a block by index in chat.blocks.
+local function block_line(chat, idx)
+  local b = chat.blocks[idx]
+  if not b then
+    return nil
+  end
+  local pos = vim.api.nvim_buf_get_extmark_by_id(chat.buf, NS, b.mark, {})
+  return pos[1]
+end
+
+--- Jump to the next block from the current cursor position.
+function M.jump_next_block(chat)
+  if not chat or not chat.blocks or #chat.blocks == 0 then
+    return
+  end
+  local win = sessions.window()
+  if not win then
+    return
+  end
+  local cur_row = vim.api.nvim_win_get_cursor(win)[1] - 1
+  for i = 1, #chat.blocks do
+    local row = block_line(chat, i)
+    if row and row > cur_row then
+      vim.api.nvim_win_set_cursor(win, { row + 1, 0 })
+      return
+    end
+  end
+end
+
+--- Jump to the previous block from the current cursor position.
+function M.jump_prev_block(chat)
+  if not chat or not chat.blocks or #chat.blocks == 0 then
+    return
+  end
+  local win = sessions.window()
+  if not win then
+    return
+  end
+  local cur_row = vim.api.nvim_win_get_cursor(win)[1] - 1
+  for i = #chat.blocks, 1, -1 do
+    local row = block_line(chat, i)
+    if row and row < cur_row then
+      vim.api.nvim_win_set_cursor(win, { row + 1, 0 })
+      return
+    end
+  end
+end
+
 --- Create a new chat buffer (not yet attached to a session).
+local PROMPT_MARK_NS = vim.api.nvim_create_namespace("mcp_chat_prompt")
+
+--- Get the 0-indexed line where the prompt region starts.
+--- The prompt mark is set when the buffer is created and stays anchored
+--- via extmark, so it shifts as content is inserted above it.
+local function prompt_start_index(buf)
+  local marks = vim.api.nvim_buf_get_extmarks(buf, PROMPT_MARK_NS, 0, -1, {})
+  if marks[1] then
+    return marks[1][2]
+  end
+  -- Fallback: last line.
+  return vim.api.nvim_buf_line_count(buf) - 1
+end
+
 function M.create_buffer(chat_id)
   local buf = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_buf_set_name(buf, "mcp-chat://" .. chat_id)
@@ -55,21 +130,22 @@ function M.create_buffer(chat_id)
     PROMPT_PREFIX,
   })
 
+  -- Mark the prompt start so we can find it as content is inserted above.
+  vim.api.nvim_buf_set_extmark(buf, PROMPT_MARK_NS, 2, 0, {
+    virt_text = { { PROMPT_HINT, "Comment" } },
+    virt_text_pos = "eol",
+  })
+
   return buf
 end
 
-local function prompt_line_index(buf)
-  -- The prompt line is always the last line.
-  return vim.api.nvim_buf_line_count(buf) - 1
-end
-
---- Insert lines just above the prompt line. Returns the row of the first
+--- Insert lines just above the prompt region. Returns the row of the first
 --- inserted line (0-indexed).
 function M.insert_above_prompt(buf, lines)
   if not vim.api.nvim_buf_is_valid(buf) then
     return nil
   end
-  local plr = prompt_line_index(buf)
+  local plr = prompt_start_index(buf)
   vim.api.nvim_buf_set_lines(buf, plr, plr, false, lines)
   return plr
 end
@@ -104,11 +180,15 @@ function M.stream_text(chat, kind, text)
   if chat.stream_kind ~= kind then
     -- Start a new streamed block.
     local header = kind == "agent_thought_chunk" and "" or ""
-    M.insert_above_prompt(buf, { header })
+    local row = M.insert_above_prompt(buf, { header })
     chat.stream_kind = kind
-    chat.stream_line = prompt_line_index(buf) - 1
+    chat.stream_line = prompt_start_index(buf) - 1
     chat.stream_buffer = ""
     chat.stream_prefix = kind == "agent_thought_chunk" and THOUGHT_PREFIX or AGENT_PREFIX
+    if row then
+      local block_type = kind == "agent_thought_chunk" and "thought" or "agent"
+      M.add_block(chat, block_type, row)
+    end
   end
 
   local combined = (chat.stream_buffer or "") .. text
@@ -146,7 +226,7 @@ function M.stream_text(chat, kind, text)
     -- next chunk starts a fresh block (avoids a trailing blank prefix line).
     if open_text ~= "" then
       M.insert_above_prompt(buf, { chat.stream_prefix .. open_text })
-      chat.stream_line = prompt_line_index(buf) - 1
+      chat.stream_line = prompt_start_index(buf) - 1
       chat.stream_buffer = open_text
     else
       M.end_stream(chat)
@@ -212,6 +292,7 @@ function M.render_tool_call(chat, update)
     end
     local row = M.insert_above_prompt(buf, { label }) or 0
     chat.tool_lines[id] = { line = row, last_label = label, last_update = update }
+    M.add_block(chat, "tool", row)
   else
     local entry = chat.tool_lines[id]
     -- Merge new fields onto last_update so partial tool_call_update payloads
@@ -226,6 +307,7 @@ function M.render_tool_call(chat, update)
       -- Was deferred (pending stash): now render.
       local row = M.insert_above_prompt(buf, { label }) or 0
       entry.line = row
+      M.add_block(chat, "tool", row)
     end
     entry.last_label = label
   end
@@ -271,7 +353,10 @@ function M.append_user_prompt(chat, text)
   for _, t in ipairs(vim.split(text, "\n", { plain = true })) do
     table.insert(lines, "  " .. t)
   end
-  M.insert_above_prompt(buf, lines)
+  local row = M.insert_above_prompt(buf, lines)
+  if row then
+    M.add_block(chat, "user", row)
+  end
 end
 
 --- Append a status / system line.
@@ -281,7 +366,10 @@ function M.append_status(chat, text)
   if not vim.api.nvim_buf_is_valid(buf) then
     return
   end
-  M.insert_above_prompt(buf, { " " .. text })
+  local row = M.insert_above_prompt(buf, { " " .. text })
+  if row then
+    M.add_block(chat, "status", row)
+  end
 end
 
 local function chat_winbar()
@@ -351,21 +439,38 @@ function M.focus_prompt()
   if not win then
     return
   end
-  local plr = prompt_line_index(active.buf)
-  vim.api.nvim_win_set_cursor(win, { plr + 1, #PROMPT_PREFIX })
+  local last = vim.api.nvim_buf_line_count(active.buf)
+  vim.api.nvim_win_set_cursor(win, { last, 0 })
   vim.cmd("startinsert!")
 end
 
---- Read the user's typed prompt from the prompt line, clear it, return text.
+--- Read the user's typed prompt (possibly multiline) from the prompt region,
+--- clear it back to a single "> " line, return the text.
 function M.consume_prompt(chat)
   if not vim.api.nvim_buf_is_valid(chat.buf) then
     return ""
   end
-  local plr = prompt_line_index(chat.buf)
-  local line = vim.api.nvim_buf_get_lines(chat.buf, plr, plr + 1, false)[1] or ""
-  local text = line:sub(#PROMPT_PREFIX + 1)
-  vim.api.nvim_buf_set_lines(chat.buf, plr, plr + 1, false, { PROMPT_PREFIX })
-  return text
+  local start = prompt_start_index(chat.buf)
+  local total = vim.api.nvim_buf_line_count(chat.buf)
+  local lines = vim.api.nvim_buf_get_lines(chat.buf, start, total, false)
+  -- Strip the "> " prefix from the first line.
+  if lines[1] then
+    lines[1] = lines[1]:sub(#PROMPT_PREFIX + 1)
+  end
+  -- Reset to a single empty prompt line.
+  vim.api.nvim_buf_set_lines(chat.buf, start, total, false, { PROMPT_PREFIX })
+  -- Trim empty trailing lines.
+  while #lines > 0 and lines[#lines] == "" do
+    table.remove(lines)
+  end
+  return table.concat(lines, "\n")
+end
+
+--- Returns true if cursor is within the prompt region.
+function M.in_prompt_region(buf)
+  local start = prompt_start_index(buf)
+  local cur = vim.api.nvim_win_get_cursor(0)[1] - 1
+  return cur >= start
 end
 
 M.PROMPT_PREFIX = PROMPT_PREFIX

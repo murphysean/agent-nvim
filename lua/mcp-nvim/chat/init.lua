@@ -78,33 +78,34 @@ function M.new()
     buf = buf,
     session = nil,
     tool_lines = {},
+    blocks = {},
   }
   sessions.add(chat)
 
-  -- Buffer-local <CR>: in insert mode on the prompt line, submit; otherwise
-  -- pass through. In normal mode, jump to the prompt line and start
-  -- inserting (so users can hit <CR> from anywhere to focus the prompt).
-  local function on_prompt_line()
-    local cur = vim.api.nvim_win_get_cursor(0)
-    return cur[1] == vim.api.nvim_buf_line_count(buf)
-  end
-
-  vim.keymap.set("i", "<CR>", function()
-    if on_prompt_line() then
-      M.submit()
-    else
-      -- Pass through (insert literal newline).
-      vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<CR>", true, false, true), "n", false)
-    end
-  end, { buffer = buf, desc = "mcp-chat: submit prompt" })
+  vim.keymap.set({ "n", "i" }, "<C-s>", function()
+    vim.cmd("stopinsert")
+    M.submit()
+  end, { buffer = buf, desc = "mcp-chat: send prompt" })
 
   vim.keymap.set("n", "<CR>", function()
-    if on_prompt_line() then
-      M.submit()
-    else
-      ui.focus_prompt()
-    end
-  end, { buffer = buf, desc = "mcp-chat: focus or submit prompt" })
+    ui.focus_prompt()
+  end, { buffer = buf, desc = "mcp-chat: focus prompt" })
+
+  vim.keymap.set("n", "]b", function()
+    ui.jump_next_block(chat)
+  end, { buffer = buf, desc = "mcp-chat: next block" })
+
+  vim.keymap.set("n", "[b", function()
+    ui.jump_prev_block(chat)
+  end, { buffer = buf, desc = "mcp-chat: previous block" })
+
+  vim.keymap.set("n", "q", function()
+    ui.hide()
+  end, { buffer = buf, desc = "mcp-chat: hide window" })
+
+  vim.keymap.set("n", "<C-c>", function()
+    M.cancel()
+  end, { buffer = buf, desc = "mcp-chat: cancel turn" })
 
   -- Build the ACP session.
   local sess = AcpSession.new({

@@ -90,8 +90,17 @@ single-instance setups.
 | `:McpStart`        | Start the MCP server                     |
 | `:McpStop`         | Stop the MCP server                      |
 | `:McpStatus`       | Show server status and session count     |
+| `:McpUrl`          | Print the MCP server URL (`:McpUrl!` copies to clipboard) |
 | `:McpSample`       | Send a sampling/createMessage request    |
 | `:McpAutoComplete` | AI code completion at cursor (normal/visual) |
+| `:McpChat`         | Open the ACP chat window                 |
+| `:McpChatToggle`   | Toggle chat window (session stays alive) |
+| `:McpChatNew`      | Start a new chat session                 |
+| `:McpChatNext`     | Switch to next chat session              |
+| `:McpChatPrev`     | Switch to previous chat session          |
+| `:McpChatCancel`   | Cancel the in-flight agent turn          |
+| `:McpChatClose`    | Close the active chat session            |
+| `:McpChatList`     | List active chat sessions                |
 
 ## AI Assist (Sampling)
 
@@ -127,6 +136,66 @@ For users without blink.cmp, the plugin claims `completefunc` and/or `omnifunc` 
 - `<C-x><C-o>` — triggers AI completion via omnifunc (only if no LSP is attached)
 
 These are claimed dynamically per-buffer and released when the client disconnects.
+
+## ACP Chat
+
+The plugin includes a built-in chat UI powered by the [Agent Client Protocol](https://agentclientprotocol.com/) (ACP). It spawns an agent (default: `goose acp`) and gives it access back to your Neovim instance via the MCP HTTP server.
+
+Open with `:McpChat` or `<leader>aa`. Toggle with `<leader>at`.
+
+### Chat Keybindings
+
+These are buffer-local to the chat window:
+
+| Key | Mode | Action |
+|-----|------|--------|
+| `<C-s>` | n, i | **Send** the prompt |
+| `<CR>` | n | Focus the prompt (enter insert at bottom) |
+| `<CR>` | i | Insert a newline (multiline input) |
+| `]b` | n | Jump to next block (message, tool call, etc.) |
+| `[b` | n | Jump to previous block |
+| `q` | n | Hide the chat window (session stays alive) |
+| `<C-c>` | n | Cancel the in-flight agent turn |
+
+### Chat UI Layout
+
+```
+┌─────────────────────────────────────────────┐
+│  mcp-chat [1*] [2]                          │  ← winbar tabs
+├─────────────────────────────────────────────┤
+│ # mcp-chat session 1                        │
+│                                             │
+│  session ready (id=abc123)                 │
+│                                             │
+│  you:                                       │
+│   Fix the error in main.rs                  │
+│                                             │
+│ ◐  Edit src/main.rs                        │
+│                                             │
+│   Done. Fixed the type mismatch on line 42. │
+│                                             │
+│  [turn end: end_turn]                      │
+│                                             │
+│ > _                          [C-s to send]  │  ← prompt region
+└─────────────────────────────────────────────┘
+```
+
+The prompt region supports multiline input — just type normally with `<CR>` for newlines, then `<C-s>` to send.
+
+### Configuration
+
+```lua
+require("mcp-nvim").setup({
+  acp = {
+    command = "goose",
+    args = { "acp", "--with-builtin", "developer,editor" },
+    env = {},
+  },
+  chat_height = 15,  -- height of the chat split in lines
+})
+```
+
+Set `acp = nil` to disable chat entirely.
 
 ## Connecting Clients
 
