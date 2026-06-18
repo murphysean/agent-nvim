@@ -8,7 +8,7 @@
 --- Connection per Session to keep cancellation and lifecycle simple — the
 --- Chat layer can promote to shared connections later if perf demands it.
 
-local Connection = require("mcp-nvim.acp.connection").Connection
+local Connection = require("mcp-nvim.acp.connection")
 local bridge = require("mcp-nvim.bridge")
 
 local M = {}
