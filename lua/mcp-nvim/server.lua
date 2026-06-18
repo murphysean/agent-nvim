@@ -4,10 +4,14 @@ local protocol = require("mcp-nvim.mcp.protocol")
 local registry = require("mcp-nvim.mcp.registry")
 local sessions = require("mcp-nvim.sessions")
 local events = require("mcp-nvim.events")
+local lockfile = require("mcp-nvim.lockfile")
 
 local M = {}
 
 local server_handle = nil
+local bound_port = nil
+local bound_host = nil
+local auth_token = nil
 
 local function get_cors_headers(request)
   local origin = request and request.headers and request.headers["origin"] or ""
@@ -194,9 +198,24 @@ function M.start(host, port)
   events.setup()
   sessions.start_ping()
 
+  -- Reap lockfiles from crashed peers before binding.
+  pcall(lockfile.gc_stale)
+
   local version = require("mcp-nvim").version or "unknown"
   server_handle = http.create_server(host, port, handle_request)
-  vim.notify(string.format("MCP v%s started on http://%s:%d/mcp", version, host, port), vim.log.levels.INFO)
+  if not server_handle then
+    return
+  end
+
+  -- When port == 0, the kernel picks a free port. Read it back.
+  local sockname = server_handle:getsockname()
+  bound_host = host
+  bound_port = (sockname and sockname.port) or port
+
+  local url = string.format("http://%s:%d/mcp", bound_host, bound_port)
+  auth_token = lockfile.write({ url = url })
+
+  vim.notify(string.format("MCP v%s started on %s", version, url), vim.log.levels.INFO)
 end
 
 function M.stop()
@@ -204,14 +223,39 @@ function M.stop()
     events.teardown()
     sessions.shutdown()
     sessions.reset()
+    pcall(function()
+      require("mcp-nvim.bridge").revoke_all()
+    end)
     server_handle:close()
     server_handle = nil
+    bound_port = nil
+    bound_host = nil
+    auth_token = nil
+    pcall(lockfile.remove)
     vim.notify("MCP server stopped", vim.log.levels.INFO)
   end
 end
 
 function M.is_running()
   return server_handle ~= nil
+end
+
+--- Returns the bound URL, or nil if the server isn't running.
+function M.url()
+  if not bound_host or not bound_port then
+    return nil
+  end
+  return string.format("http://%s:%d/mcp", bound_host, bound_port)
+end
+
+--- Returns the bound port (kernel-allocated when configured port was 0), or nil.
+function M.port()
+  return bound_port
+end
+
+--- Returns the auth token written into the lockfile, or nil.
+function M.auth_token()
+  return auth_token
 end
 
 return M

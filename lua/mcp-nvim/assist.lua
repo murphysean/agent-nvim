@@ -29,34 +29,18 @@ local function get_selection_or_context(buf)
   return table.concat(lines, "\n"), start_l, end_l
 end
 
---- Check for active sampling session, return session_id or nil + notify.
-local function get_session()
-  local sessions = require("mcp-nvim.sessions")
-  local list = sessions.list()
-  if #list == 0 then
-    vim.notify("No active MCP session — is Goose connected?", vim.log.levels.WARN)
-    return nil
-  end
-  return list[1].id
-end
-
---- Fire a sampling request with the given template and context overrides.
+--- Fire an assist request with the given template and context overrides.
+--- Routes through the active backend (MCP sampling or one-shot ACP) — see
+--- assist_backend.lua for selection rules.
 ---@param template_name string
 ---@param ctx_overrides table Additional context key/values
 ---@param callback fun(text: string|nil, err: string|nil)
 local function fire_sampling(template_name, ctx_overrides, callback)
-  local session_id = get_session()
-  if not session_id then
-    callback(nil, "No session")
-    return
-  end
-
   local context_mod = require("mcp-nvim.prompts.context")
   local templates = require("mcp-nvim.prompts.template_engine")
-  local sampling = require("mcp-nvim.mcp.sampling")
+  local backend = require("mcp-nvim.assist_backend")
 
   local ctx = context_mod.gather(ctx_overrides)
-  -- Merge any extra overrides that aren't part of gather()
   for k, v in pairs(ctx_overrides) do
     ctx[k] = v
   end
@@ -67,31 +51,20 @@ local function fire_sampling(template_name, ctx_overrides, callback)
     return
   end
 
-  sampling.create_message({
-    messages = {
-      {
-        role = "user",
-        content = {
-          type = "text",
-          text = "Perform the task described in your instructions. Return only the requested output.",
-        },
-      },
-    },
-    systemPrompt = system,
-    maxTokens = 1024,
-  }, function(result, sampling_err)
+  local user_text = "Perform the task described in your instructions. Return only the requested output."
+
+  backend.send(system, user_text, function(text, send_err)
     vim.schedule(function()
-      if sampling_err then
-        callback(nil, vim.inspect(sampling_err))
+      if send_err then
+        callback(nil, send_err)
         return
       end
-
-      local text = result and result.content and result.content.text or ""
-      -- Strip markdown fences if wrapping the whole response
+      text = text or ""
+      -- Strip markdown fences if wrapping the whole response.
       text = text:gsub("^```[%w]*\n?", ""):gsub("\n?```%s*$", "")
       callback(text, nil)
     end)
-  end, session_id)
+  end)
 end
 
 --- Show text in a new tab as a scratch markdown buffer.

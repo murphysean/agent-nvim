@@ -10,14 +10,24 @@ local M = {}
 local registered = false
 local keymap_ids = {} -- track what we've bound so we can unbind
 
---- Check if sampling is currently available.
+--- Check if an assist backend is currently available.
+--- Returns true if EITHER:
+---   - an MCP client with sampling capability is connected, OR
+---   - config.acp.command is set (we can spawn a one-shot ACP agent).
+---
+--- The function name is historical — it now reflects "assist available"
+--- rather than just "MCP sampling available".
 function M.sampling_available()
-  local ok, sessions = pcall(require, "mcp-nvim.sessions")
-  if not ok or #sessions.list() == 0 then
-    return false
+  local ok_sessions, sessions = pcall(require, "mcp-nvim.sessions")
+  local ok_proto, protocol = pcall(require, "mcp-nvim.mcp.protocol")
+  if ok_sessions and ok_proto and #sessions.list() > 0 and protocol.client_supports("sampling") then
+    return true
   end
-  local protocol = require("mcp-nvim.mcp.protocol")
-  return protocol.client_supports("sampling")
+  local cfg = require("mcp-nvim").config or {}
+  if cfg.acp and cfg.acp.command and cfg.acp.command ~= "" then
+    return true
+  end
+  return false
 end
 
 --- Register all sampling-dependent keymaps and features.

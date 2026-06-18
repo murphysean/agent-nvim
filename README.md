@@ -68,13 +68,20 @@ use {
 ```lua
 require("mcp-nvim").setup({
   host = "127.0.0.1",           -- Listen address
-  port = 3000,                  -- Listen port
+  port = 0,                     -- 0 = kernel picks a free port (per-instance isolation)
   auto_start = true,            -- Start server when Neovim launches
   allow_code_execution = true,  -- Enable lua_exec, nvim_exec, nvim_eval, run (set false to disable)
   review_edits = true,          -- Show diff review UI before applying edit_file/write_file
   log_level = "info",           -- Event broadcast level: "debug", "info", "warning", "error"
 })
 ```
+
+By default `port = 0` lets the OS pick a free port so multiple Neovim
+instances don't collide. Discover the URL for the current instance with
+`:McpStatus`, copy it with `:McpUrl!`, or read the per-instance lockfile at
+`$XDG_RUNTIME_DIR/mcp-nvim/<pid>.json` (falls back to `stdpath('state')`).
+Set `port = 3000` for a fixed port if you need a stable URL for legacy
+single-instance setups.
 
 ## Commands
 
