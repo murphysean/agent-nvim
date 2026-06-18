@@ -51,29 +51,40 @@ end
 function Session:_build_mcp_servers()
   local servers = {}
   if self._opts.include_bridge ~= false then
-    local servername = vim.v.servername
-    if not servername or servername == "" then
-      -- Without a servername the bridge can't proxy back — skip.
-      if self._opts.on_status then
-        pcall(
-          self._opts.on_status,
-          "warning",
-          "v:servername is empty; mcp-nvim bridge skipped (start nvim with --listen)"
-        )
-      end
-    else
-      local token = bridge.mint(self._opts.spawn_id or "acp-session")
-      self._bridge_token = token
-      local script = self._opts.plugin_dir .. "/bin/mcp-stdio-bridge.lua"
+    local server = require("mcp-nvim.server")
+    local url = server.url()
+    if url then
       table.insert(servers, {
         name = "mcp-nvim",
-        command = vim.v.progpath,
-        args = { "--headless", "-l", script },
-        env = {
-          { name = "MCP_NVIM_TARGET", value = servername },
-          { name = "MCP_NVIM_AUTH", value = token },
-        },
+        type = "http",
+        url = url,
+        headers = {},
       })
+    else
+      -- HTTP server not running; fall back to stdio bridge via RPC socket.
+      local servername = vim.v.servername
+      if not servername or servername == "" then
+        if self._opts.on_status then
+          pcall(
+            self._opts.on_status,
+            "warning",
+            "v:servername is empty and HTTP server not running; mcp-nvim bridge skipped"
+          )
+        end
+      else
+        local token = bridge.mint(self._opts.spawn_id or "acp-session")
+        self._bridge_token = token
+        local script = self._opts.plugin_dir .. "/bin/mcp-stdio-bridge.lua"
+        table.insert(servers, {
+          name = "mcp-nvim",
+          command = vim.v.progpath,
+          args = { "--headless", "-l", script },
+          env = {
+            { name = "MCP_NVIM_TARGET", value = servername },
+            { name = "MCP_NVIM_AUTH", value = token },
+          },
+        })
+      end
     end
   end
   for _, extra in ipairs(self._opts.extra_mcp_servers or {}) do
