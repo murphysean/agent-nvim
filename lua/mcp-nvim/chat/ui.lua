@@ -17,8 +17,7 @@ local sessions = require("mcp-nvim.chat.sessions")
 local M = {}
 
 local NS = vim.api.nvim_create_namespace("mcp_chat_ui")
-local PROMPT_PREFIX = "> "
-local PROMPT_HINT = "   [C-s to send]"
+local PROMPT_PREFIX = "[C-s] > "
 
 local STATUS_ICON = {
   pending = "○",
@@ -131,10 +130,7 @@ function M.create_buffer(chat_id)
   })
 
   -- Mark the prompt start so we can find it as content is inserted above.
-  vim.api.nvim_buf_set_extmark(buf, PROMPT_MARK_NS, 2, 0, {
-    virt_text = { { PROMPT_HINT, "Comment" } },
-    virt_text_pos = "eol",
-  })
+  vim.api.nvim_buf_set_extmark(buf, PROMPT_MARK_NS, 2, 0, {})
 
   return buf
 end
@@ -429,23 +425,25 @@ function M.refresh_winbar()
   end
 end
 
---- Move cursor to the prompt line and enter insert mode at the right column.
+--- Move cursor to the prompt line and enter insert mode at the end.
 function M.focus_prompt()
   local active = sessions.active()
   if not active then
     return
   end
   local win = sessions.window()
-  if not win then
+  if not win or not vim.api.nvim_win_is_valid(win) then
     return
   end
-  local last = vim.api.nvim_buf_line_count(active.buf)
-  vim.api.nvim_win_set_cursor(win, { last, 0 })
+  local prompt_row = prompt_start_index(active.buf)
+  local line = vim.api.nvim_buf_get_lines(active.buf, prompt_row, prompt_row + 1, false)[1] or ""
+  vim.api.nvim_set_current_win(win)
+  vim.api.nvim_win_set_cursor(win, { prompt_row + 1, #line })
   vim.cmd("startinsert!")
 end
 
 --- Read the user's typed prompt (possibly multiline) from the prompt region,
---- clear it back to a single "> " line, return the text.
+--- clear it back to a single prompt line, return the text.
 function M.consume_prompt(chat)
   if not vim.api.nvim_buf_is_valid(chat.buf) then
     return ""
@@ -453,12 +451,16 @@ function M.consume_prompt(chat)
   local start = prompt_start_index(chat.buf)
   local total = vim.api.nvim_buf_line_count(chat.buf)
   local lines = vim.api.nvim_buf_get_lines(chat.buf, start, total, false)
-  -- Strip the "> " prefix from the first line.
+  -- Strip the prompt prefix from the first line.
   if lines[1] then
     lines[1] = lines[1]:sub(#PROMPT_PREFIX + 1)
   end
   -- Reset to a single empty prompt line.
   vim.api.nvim_buf_set_lines(chat.buf, start, total, false, { PROMPT_PREFIX })
+  -- Re-anchor the prompt extmark at the new prompt line.
+  vim.api.nvim_buf_clear_namespace(chat.buf, PROMPT_MARK_NS, 0, -1)
+  local new_prompt_row = vim.api.nvim_buf_line_count(chat.buf) - 1
+  vim.api.nvim_buf_set_extmark(chat.buf, PROMPT_MARK_NS, new_prompt_row, 0, {})
   -- Trim empty trailing lines.
   while #lines > 0 and lines[#lines] == "" do
     table.remove(lines)
