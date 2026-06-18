@@ -102,6 +102,26 @@ local function dispatch_inbound_request(self, method, params, respond)
     require("mcp-nvim.acp.fs").write_text_file(params, respond)
     return
   end
+  if method == "terminal/create" then
+    require("mcp-nvim.acp.terminal").create(params, respond)
+    return
+  end
+  if method == "terminal/output" then
+    require("mcp-nvim.acp.terminal").output(params, respond)
+    return
+  end
+  if method == "terminal/wait_for_exit" then
+    require("mcp-nvim.acp.terminal").wait_for_exit(params, respond)
+    return
+  end
+  if method == "terminal/kill" then
+    require("mcp-nvim.acp.terminal").kill(params, respond)
+    return
+  end
+  if method == "terminal/release" then
+    require("mcp-nvim.acp.terminal").release(params, respond)
+    return
+  end
   if method == "session/request_permission" then
     if self._opts.on_permission then
       self._opts.on_permission(params, respond)
@@ -175,7 +195,7 @@ function Session:start(cb)
     protocolVersion = PROTOCOL_VERSION,
     clientCapabilities = {
       fs = { readTextFile = true, writeTextFile = true },
-      terminal = false,
+      terminal = true,
     },
     clientInfo = self._opts.client_info or { name = "mcp-nvim", version = "1.0.0" },
   }, function(result, err)

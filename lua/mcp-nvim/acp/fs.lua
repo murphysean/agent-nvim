@@ -27,42 +27,25 @@ local function find_buf_by_path(path)
   return nil
 end
 
-local function read_file_disk(path)
-  local fd = uv.fs_open(path, "r", 420) -- 0644
-  if not fd then
-    return nil, "cannot open file: " .. path
-  end
-  local stat = uv.fs_fstat(fd)
-  if not stat then
-    uv.fs_close(fd)
-    return nil, "cannot stat file: " .. path
-  end
-  local data = uv.fs_read(fd, stat.size, 0) or ""
-  uv.fs_close(fd)
-  return data, nil
-end
-
-local function slice_lines(content, line, limit)
-  if not line and not limit then
-    return content
-  end
+local function slice_content(content, start_line, limit)
   local lines = vim.split(content, "\n", { plain = true })
-  local start_idx = line or 1
+  local total = #lines
+  local start_idx = start_line or 1
   if start_idx < 1 then
     start_idx = 1
   end
-  local end_idx = limit and (start_idx + limit - 1) or #lines
-  if end_idx > #lines then
-    end_idx = #lines
+  local end_idx = limit and (start_idx + limit - 1) or total
+  if end_idx > total then
+    end_idx = total
   end
-  if start_idx > #lines then
-    return ""
+  if start_idx > total then
+    return "", total
   end
-  local out = {}
+  local sliced = {}
   for i = start_idx, end_idx do
-    table.insert(out, lines[i])
+    table.insert(sliced, lines[i])
   end
-  return table.concat(out, "\n")
+  return table.concat(sliced, "\n"), total
 end
 
 --- fs/read_text_file handler. params: { sessionId, path, line?, limit? }.
@@ -84,15 +67,19 @@ function M.read_text_file(params, respond)
     local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
     content = table.concat(lines, "\n")
   else
-    local data, err = read_file_disk(path)
-    if not data then
-      respond({ code = -32000, message = err }, true)
+    if not uv.fs_stat(path) then
+      respond({ code = -32000, message = "file not found: " .. path }, true)
       return
     end
-    content = data
+    -- Load into a buffer so the agent's view matches editor state going forward.
+    local bufnr = vim.fn.bufadd(path)
+    vim.fn.bufload(bufnr)
+    local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+    content = table.concat(lines, "\n")
   end
 
-  respond({ content = slice_lines(content, params.line, params.limit) })
+  local sliced, _ = slice_content(content, params.line, params.limit)
+  respond({ content = sliced })
 end
 
 --- Apply a write directly: ensure parent dir, write file, reload buffer.
