@@ -111,6 +111,8 @@ function M.cancel_for_chat(chat_id)
     in_flight.cancelled = true
     safe_respond(in_flight, { outcome = { outcome = "cancelled" } })
     in_flight = nil
+    -- Pump the next request so other chats' permissions aren't stalled.
+    M.pump()
   end
   for _, req in ipairs(queue) do
     if req.chat and req.chat.id == chat_id then

@@ -73,10 +73,18 @@ function M.create(params, respond)
       if not data then
         return
       end
-      for _, chunk in ipairs(data) do
-        if chunk ~= "" and term_state.output_bytes < term_state.byte_limit then
-          table.insert(term_state.output, chunk)
-          term_state.output_bytes = term_state.output_bytes + #chunk
+      for i, chunk in ipairs(data) do
+        -- Neovim sends a trailing "" as a sentinel for the final newline;
+        -- skip only that, not genuine blank lines in the output.
+        if i < #data and chunk == "" then
+          -- genuine blank line
+        elseif chunk == "" and i == #data then
+          -- skip trailing sentinel
+        else
+          if term_state.output_bytes < term_state.byte_limit then
+            table.insert(term_state.output, chunk)
+            term_state.output_bytes = term_state.output_bytes + #chunk
+          end
         end
       end
     end,
@@ -203,8 +211,10 @@ function M.release(params, respond)
     pcall(vim.api.nvim_buf_delete, term_state.buf, { force = true })
   end
 
-  -- Fail any waiters.
-  for _, waiter in ipairs(term_state.waiters) do
+  -- Fail any waiters. Clear the table first so on_exit can't re-fire them.
+  local waiters = term_state.waiters
+  term_state.waiters = {}
+  for _, waiter in ipairs(waiters) do
     vim.schedule(function()
       waiter({ exitCode = nil, signal = "released" })
     end)

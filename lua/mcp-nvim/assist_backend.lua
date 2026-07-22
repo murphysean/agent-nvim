@@ -44,10 +44,12 @@ local function via_sampling(system_prompt, user_text, callback)
     return
   end
   local session_id = list[1].id
+  local cfg = require("mcp-nvim").config or {}
+  local max_tokens = cfg.assist_max_tokens or 4096
   sampling.create_message({
     messages = { { role = "user", content = { type = "text", text = user_text } } },
     systemPrompt = system_prompt,
-    maxTokens = 1024,
+    maxTokens = max_tokens,
   }, function(result, err)
     vim.schedule(function()
       if err then

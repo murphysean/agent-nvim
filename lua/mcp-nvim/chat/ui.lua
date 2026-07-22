@@ -345,7 +345,7 @@ function M.append_user_prompt(chat, text)
   if not vim.api.nvim_buf_is_valid(buf) then
     return
   end
-  local lines = vim.split("\n you:", "\n", { plain = true })
+  local lines = { " you:" }
   for _, t in ipairs(vim.split(text, "\n", { plain = true })) do
     table.insert(lines, "  " .. t)
   end
@@ -444,6 +444,7 @@ end
 
 --- Read the user's typed prompt (possibly multiline) from the prompt region,
 --- clear it back to a single prompt line, return the text.
+--- If the prompt is empty, the buffer is left untouched.
 function M.consume_prompt(chat)
   if not vim.api.nvim_buf_is_valid(chat.buf) then
     return ""
@@ -455,17 +456,22 @@ function M.consume_prompt(chat)
   if lines[1] then
     lines[1] = lines[1]:sub(#PROMPT_PREFIX + 1)
   end
+  -- Trim empty trailing lines.
+  while #lines > 0 and lines[#lines] == "" do
+    table.remove(lines)
+  end
+  local text = table.concat(lines, "\n")
+  -- Don't clear the prompt if it's empty — preserve the user's partial input.
+  if text == "" then
+    return ""
+  end
   -- Reset to a single empty prompt line.
   vim.api.nvim_buf_set_lines(chat.buf, start, total, false, { PROMPT_PREFIX })
   -- Re-anchor the prompt extmark at the new prompt line.
   vim.api.nvim_buf_clear_namespace(chat.buf, PROMPT_MARK_NS, 0, -1)
   local new_prompt_row = vim.api.nvim_buf_line_count(chat.buf) - 1
   vim.api.nvim_buf_set_extmark(chat.buf, PROMPT_MARK_NS, new_prompt_row, 0, {})
-  -- Trim empty trailing lines.
-  while #lines > 0 and lines[#lines] == "" do
-    table.remove(lines)
-  end
-  return table.concat(lines, "\n")
+  return text
 end
 
 --- Returns true if cursor is within the prompt region.

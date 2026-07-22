@@ -11,7 +11,7 @@
 --- Per ACP, paths must be absolute. Both methods take {sessionId, path} and
 --- read also accepts {line, limit} (1-based, both optional).
 
-local uv = vim.loop
+local uv = vim.uv or vim.loop
 
 local M = {}
 
@@ -89,13 +89,17 @@ local function apply_write(path, content, respond)
     vim.fn.mkdir(parent, "p")
   end
 
-  local fd = uv.fs_open(path, "w", 420) -- 0644
+  local fd = uv.fs_open(path, "w", tonumber("0644", 8))
   if not fd then
     respond({ code = -32000, message = "cannot open for write: " .. path }, true)
     return
   end
-  uv.fs_write(fd, content, 0)
+  local write_ok, write_err = uv.fs_write(fd, content, 0)
   uv.fs_close(fd)
+  if not write_ok then
+    respond({ code = -32000, message = "write failed: " .. tostring(write_err) }, true)
+    return
+  end
 
   local buf = find_buf_by_path(path)
   if buf then
@@ -141,7 +145,11 @@ function M.write_text_file(params, respond)
 
   -- Show diff in the buffer for this file; create/load the buffer if needed.
   vim.schedule(function()
-    local util = require("mcp-nvim.util")
+    local ok, util = pcall(require, "mcp-nvim.util")
+    if not ok then
+      respond({ code = -32000, message = "internal error: " .. tostring(util) }, true)
+      return
+    end
 
     local bufnr = find_buf_by_path(path)
     if not bufnr then
@@ -161,7 +169,11 @@ function M.write_text_file(params, respond)
       table.remove(new_lines)
     end
 
-    local review = require("mcp-nvim.review")
+    local review_ok, review = pcall(require, "mcp-nvim.review")
+    if not review_ok then
+      respond({ code = -32000, message = "internal error: " .. tostring(review) }, true)
+      return
+    end
     review.show_diff(bufnr, 1, old_lines, new_lines, function(decision, reason)
       if decision == "accept" then
         apply_write(path, content, respond)

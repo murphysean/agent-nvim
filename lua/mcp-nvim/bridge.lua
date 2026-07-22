@@ -16,15 +16,22 @@
 
 local protocol = require("mcp-nvim.mcp.protocol")
 local registry = require("mcp-nvim.mcp.registry")
-local uv = vim.loop
+local uv = vim.uv or vim.loop
 
 local M = {}
+
+-- Max time to wait for an async tool call (ms). Overridable via
+-- config.bridge_timeout_ms. 120s default — long enough for most tools.
+local BRIDGE_TIMEOUT_MS = 120000
 
 -- token -> { spawn_id, bridge_session_id }
 local active_tokens = {}
 
 local function gen_token()
-  local bytes = uv.random(16) or string.rep("\0", 16)
+  local bytes = uv.random(16)
+  if not bytes then
+    error("bridge: uv.random failed — cannot generate secure auth token")
+  end
   return (bytes:gsub(".", function(c)
     return string.format("%02x", c:byte())
   end))
@@ -34,7 +41,10 @@ end
 --- Caller passes spawn_id (e.g., chat session id) for reference.
 --- Returns the token string.
 function M.mint(spawn_id)
-  local token = gen_token()
+  local token_ok, token = pcall(gen_token)
+  if not token_ok then
+    return nil
+  end
   -- Each bridge gets its own MCP session id so subscriptions/state
   -- don't leak between concurrent agents talking to the same nvim.
   local bridge_session_id = "bridge-" .. token:sub(1, 8)
@@ -97,16 +107,18 @@ function _G._mcp_nvim_bridge_dispatch(token, body)
   local result = protocol.handle_jsonrpc(body, registry, session_id, respond_fn)
 
   if result == "async" then
+    -- Allow config override of the timeout.
+    local cfg = require("mcp-nvim").config or {}
+    local timeout = cfg.bridge_timeout_ms or BRIDGE_TIMEOUT_MS
     -- Block the bridge call (not the nvim event loop) until the tool finishes.
-    -- 60s ceiling for sanity; real tool calls finish in ms-to-seconds.
-    local ok = vim.wait(60000, function()
+    local ok = vim.wait(timeout, function()
       return pending ~= nil
     end, 10)
     if not ok then
       return json.encode({
         jsonrpc = "2.0",
         id = vim.NIL,
-        error = { code = -32603, message = "bridge: tool call timed out" },
+        error = { code = -32603, message = "bridge: tool call timed out (" .. (timeout / 1000) .. "s)" },
       })
     end
     return pending

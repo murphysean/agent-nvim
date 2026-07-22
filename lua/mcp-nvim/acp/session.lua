@@ -267,6 +267,11 @@ function Session:prompt(content_blocks, cb)
     sessionId = self._session_id,
     prompt = content_blocks,
   }, function(result, err)
+    -- Guard against double-callback: on_exit may have already fired and
+    -- cleared _current_turn. Only invoke cb if we still own the turn.
+    if not self._current_turn then
+      return
+    end
     self._current_turn = nil
     if err then
       if cb then

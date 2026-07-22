@@ -26,7 +26,7 @@ local function on_status(chat, state, info)
     elseif state == "initialized" then
       ui.append_status(chat, "agent initialized, creating session...")
     elseif state == "ready" then
-      ui.append_status(chat, "session ready (id=" .. tostring(info.sessionId) .. ")")
+      ui.append_status(chat, "session ready (id=" .. tostring(info and info.sessionId or "?") .. ")")
       ui.focus_prompt()
     elseif state == "error" then
       ui.append_status(chat, "error: " .. vim.inspect(info))
@@ -126,7 +126,7 @@ function M.new()
     end,
     on_stderr = function(line)
       -- Stash a few lines in the buffer for debugging; cap noise.
-      if line:match("error") or line:match("ERROR") or line:match("panic") then
+      if line:lower():match("error") or line:lower():match("panic") then
         vim.schedule(function()
           ui.append_status(chat, "[stderr] " .. line)
         end)
@@ -156,7 +156,7 @@ function M.submit()
     return
   end
   local text = ui.consume_prompt(chat)
-  if text == "" then
+  if not text or text == "" then
     return
   end
   -- Drop out of insert mode.
