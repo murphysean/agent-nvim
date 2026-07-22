@@ -27,15 +27,15 @@ local STATUS_ICON = {
 }
 
 local KIND_ICON = {
-  read = "",
-  edit = "",
-  delete = "",
-  move = "",
-  search = "",
-  execute = "",
-  think = "",
-  fetch = "",
-  other = "",
+  read = "📖",
+  edit = "✏️",
+  delete = "🗑",
+  move = "📦",
+  search = "🔍",
+  execute = "▶",
+  think = "💭",
+  fetch = "🌐",
+  other = "•",
 }
 
 --- Record a block boundary. Blocks shift as lines are inserted above them,
@@ -164,8 +164,8 @@ end
 ---
 --- The first time we stream after a non-stream event, we insert a fresh
 --- header line ("" or "") and make it the open line.
-local AGENT_PREFIX = "  "
-local THOUGHT_PREFIX = "  "
+local AGENT_PREFIX = "🤖 "
+local THOUGHT_PREFIX = "💭 "
 
 function M.stream_text(chat, kind, text)
   local buf = chat.buf
@@ -175,7 +175,7 @@ function M.stream_text(chat, kind, text)
 
   if chat.stream_kind ~= kind then
     -- Start a new streamed block.
-    local header = kind == "agent_thought_chunk" and "" or ""
+    local header = kind == "agent_thought_chunk" and "💭" or "🤖"
     local row = M.insert_above_prompt(buf, { header })
     chat.stream_kind = kind
     chat.stream_line = prompt_start_index(buf) - 1
@@ -318,7 +318,7 @@ function M.render_plan(chat, plan_entries)
   if not vim.api.nvim_buf_is_valid(buf) then
     return
   end
-  local lines = { " Plan:" }
+  local lines = { "📋 Plan:" }
   for _, e in ipairs(plan_entries or {}) do
     local mark = "○"
     if e.status == "completed" then
@@ -362,7 +362,7 @@ function M.append_status(chat, text)
   if not vim.api.nvim_buf_is_valid(buf) then
     return
   end
-  local row = M.insert_above_prompt(buf, { " " .. text })
+  local row = M.insert_above_prompt(buf, { "ℹ " .. text })
   if row then
     M.add_block(chat, "status", row)
   end
@@ -376,7 +376,9 @@ local function chat_winbar()
   end
   local parts = { "%#WinBar# mcp-chat " }
   for _, c in ipairs(list) do
-    if active and c.id == active.id then
+    if not c then
+      -- skip stale entry
+    elseif active and c.id == active.id then
       table.insert(parts, "%#WinBarNC#[%*%#WinBar#" .. c.id .. "*%#WinBarNC#]%* ")
     else
       table.insert(parts, "%#WinBarNC#[" .. c.id .. "]%* ")
@@ -392,6 +394,7 @@ function M.show()
   if not active then
     return
   end
+  sessions.clear_window()
   local win = sessions.window()
   if win then
     vim.api.nvim_win_set_buf(win, active.buf)

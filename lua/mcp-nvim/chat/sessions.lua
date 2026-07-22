@@ -103,12 +103,20 @@ function M.set_window(win)
   state.win = win
 end
 
+--- Returns the chat window if valid, nil otherwise.
+--- Does NOT mutate state — use clear_window() to clean up stale references.
 function M.window()
   if state.win and vim.api.nvim_win_is_valid(state.win) then
     return state.win
   end
-  state.win = nil
   return nil
+end
+
+--- Clear the stored window handle if it's no longer valid.
+function M.clear_window()
+  if state.win and not vim.api.nvim_win_is_valid(state.win) then
+    state.win = nil
+  end
 end
 
 function M.shutdown_all(opts)

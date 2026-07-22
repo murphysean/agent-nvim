@@ -16,7 +16,7 @@
 
 local protocol = require("mcp-nvim.mcp.protocol")
 local registry = require("mcp-nvim.mcp.registry")
-local uv = vim.uv or vim.loop
+local security = require("mcp-nvim.security")
 
 local M = {}
 
@@ -27,21 +27,11 @@ local BRIDGE_TIMEOUT_MS = 120000
 -- token -> { spawn_id, bridge_session_id }
 local active_tokens = {}
 
-local function gen_token()
-  local bytes = uv.random(16)
-  if not bytes then
-    error("bridge: uv.random failed — cannot generate secure auth token")
-  end
-  return (bytes:gsub(".", function(c)
-    return string.format("%02x", c:byte())
-  end))
-end
-
 --- Mint a new bridge auth token tied to a logical spawn.
 --- Caller passes spawn_id (e.g., chat session id) for reference.
 --- Returns the token string.
 function M.mint(spawn_id)
-  local token_ok, token = pcall(gen_token)
+  local token_ok, token = pcall(security.gen_token)
   if not token_ok then
     return nil
   end

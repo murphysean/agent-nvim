@@ -187,6 +187,7 @@ end
 --- Toggle the chat window (hide if visible, show otherwise). Keeps session
 --- and process alive when hidden.
 function M.toggle()
+  sessions.clear_window()
   if sessions.window() then
     ui.hide()
   else

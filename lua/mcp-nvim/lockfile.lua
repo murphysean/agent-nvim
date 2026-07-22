@@ -13,6 +13,7 @@
 
 local uv = vim.uv or vim.loop
 local json = require("mcp-nvim.json")
+local security = require("mcp-nvim.security")
 
 local M = {}
 
@@ -49,17 +50,6 @@ local function pid_alive(pid)
     return false
   end
   return ret == 0
-end
-
-local function gen_token()
-  -- 16 random bytes → 32 hex chars (128-bit auth token).
-  local bytes = uv.random(16)
-  if not bytes then
-    error("lockfile: uv.random failed — cannot generate secure auth token")
-  end
-  return (bytes:gsub(".", function(c)
-    return string.format("%02x", c:byte())
-  end))
 end
 
 --- Remove stale lockfiles whose owning pid is dead.
@@ -108,7 +98,7 @@ function M.write(opts)
 
   local pid = uv.os_getpid()
   local path = string.format("%s/%d.json", dir, pid)
-  local token_ok, token = pcall(gen_token)
+  local token_ok, token = pcall(security.gen_token)
   if not token_ok then
     return nil
   end

@@ -11,21 +11,32 @@ local M = {}
 --- A line buffer that accumulates partial reads and yields complete frames.
 --- Stream chunks may arrive split across frame boundaries, contain multiple
 --- frames, or both — the buffer handles all three cases.
+--- max_bytes: optional limit on internal buffer size (default 16MB).
 local LineBuffer = {}
 LineBuffer.__index = LineBuffer
 
-function M.new_line_buffer()
-  return setmetatable({ buf = "" }, LineBuffer)
+function M.new_line_buffer(max_bytes)
+  return setmetatable({ buf = "", max_bytes = max_bytes or 16 * 1024 * 1024 }, LineBuffer)
 end
 
 --- Append raw bytes from a stdout chunk and return any complete frames as
 --- decoded JSON objects (in arrival order). Frames that fail to parse are
 --- skipped silently — caller can install a logger via on_parse_error.
+--- If the buffer exceeds max_bytes without a newline, it is reset and
+--- on_parse_error is called with an error message.
 function LineBuffer:feed(chunk)
   if not chunk or chunk == "" then
     return {}
   end
   self.buf = self.buf .. chunk
+  if #self.buf > self.max_bytes then
+    local err_msg = "line buffer exceeded " .. tostring(self.max_bytes) .. " bytes without newline"
+    self.buf = ""
+    if self.on_parse_error then
+      self.on_parse_error("", err_msg)
+    end
+    return {}
+  end
   local frames = {}
   while true do
     local nl = self.buf:find("\n", 1, true)
@@ -94,12 +105,12 @@ local IdGen = {}
 IdGen.__index = IdGen
 
 function M.new_id_gen()
-  return setmetatable({ next = 1 }, IdGen)
+  return setmetatable({ _seq = 1 }, IdGen)
 end
 
 function IdGen:alloc()
-  local id = self.next
-  self.next = id + 1
+  local id = self._seq
+  self._seq = id + 1
   return id
 end
 

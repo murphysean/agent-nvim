@@ -36,13 +36,6 @@ local function ui_choice(prompt, options, on_pick)
   end)
 end
 
-local function find_diff_in_tool_call(params)
-  -- The session/request_permission params include the toolCallId; we don't
-  -- get the original tool_call content here, so the chat layer must stash
-  -- it. For v1, fall back to ui.select.
-  return nil
-end
-
 local function safe_respond(req, payload)
   if req.done then
     return

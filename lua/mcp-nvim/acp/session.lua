@@ -93,7 +93,7 @@ function Session:_build_mcp_servers()
   return servers
 end
 
-local function dispatch_inbound_request(self, method, params, respond)
+function Session:_dispatch_inbound_request(method, params, respond)
   if method == "fs/read_text_file" then
     require("mcp-nvim.acp.fs").read_text_file(params, respond)
     return
@@ -164,7 +164,7 @@ function Session:start(cb)
       dispatch_notification(self, method, params)
     end,
     on_request = function(method, params, respond)
-      dispatch_inbound_request(self, method, params, respond)
+      self:_dispatch_inbound_request(method, params, respond)
     end,
     on_exit = function(code, signal)
       if self._bridge_token then

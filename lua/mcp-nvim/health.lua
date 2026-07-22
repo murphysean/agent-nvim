@@ -17,16 +17,20 @@ function M.check()
   end
 
   -- Active sessions
-  local sessions = require("mcp-nvim.sessions")
-  local count = sessions.count()
-  if count > 0 then
-    vim.health.ok(count .. " active MCP session(s)")
-    for _, s in ipairs(sessions.list()) do
-      local sub_count = s.subscriptions and #s.subscriptions or 0
-      vim.health.info("  Session " .. s.id .. " (" .. sub_count .. " subscriptions)")
+  local ok_sessions, sessions = pcall(require, "mcp-nvim.sessions")
+  if ok_sessions then
+    local count = sessions.count()
+    if count > 0 then
+      vim.health.ok(count .. " active MCP session(s)")
+      for _, s in ipairs(sessions.list()) do
+        local sub_count = s.subscriptions and #s.subscriptions or 0
+        vim.health.info("  Session " .. s.id .. " (" .. sub_count .. " subscriptions)")
+      end
+    else
+      vim.health.info("No MCP clients connected")
     end
   else
-    vim.health.info("No MCP clients connected")
+    vim.health.warn("Could not load session module")
   end
 
   -- Sampling / AI assist
@@ -79,10 +83,12 @@ function M.check()
   end
 
   -- Lockfile
-  local lockfile = require("mcp-nvim.lockfile")
-  local lf_path = lockfile.path()
-  if lf_path and vim.fn.filereadable(lf_path) == 1 then
-    vim.health.info("Lockfile: " .. lf_path)
+  local ok_lf, lockfile = pcall(require, "mcp-nvim.lockfile")
+  if ok_lf then
+    local lf_path = lockfile.path()
+    if lf_path and vim.fn.filereadable(lf_path) == 1 then
+      vim.health.info("Lockfile: " .. lf_path)
+    end
   end
 end
 
