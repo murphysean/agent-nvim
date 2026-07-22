@@ -122,9 +122,10 @@ function M.create_buffer(chat_id)
   vim.api.nvim_set_option_value("swapfile", false, { buf = buf })
   vim.api.nvim_set_option_value("filetype", "mcpchat", { buf = buf })
   -- Disable completion in chat buffers — the prompt is for typing to the
-  -- agent, not for code completion. This is respected by blink.cmp, nvim-cmp,
-  -- and Neovim's built-in completion.
-  vim.api.nvim_set_option_value("completion", false, { buf = buf })
+  -- agent, not for code completion. These buffer variables are checked by
+  -- blink.cmp (vim.b.completion) and nvim-cmp (vim.b.cmp_enabled).
+  vim.b[buf].completion = false
+  vim.b[buf].cmp_enabled = false
 
   -- Initial layout: a header line + a blank line + the prompt line.
   vim.api.nvim_buf_set_lines(buf, 0, -1, false, {
