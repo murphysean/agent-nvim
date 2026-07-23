@@ -1,0 +1,189 @@
+*mcp-nvim.txt*  MCP server for Neovim — AI agents drive your editor
+
+Author:  Sean Murphy
+License: MIT
+Version: 1.0.0
+
+==============================================================================
+CONTENTS                                                    *mcp-nvim-contents*
+
+    1. Introduction ........................... |mcp-nvim-introduction|
+    2. Setup .................................. |mcp-nvim-setup|
+    3. Commands ............................... |mcp-nvim-commands|
+    4. Chat ................................... |mcp-nvim-chat|
+    5. AI Assist .............................. |mcp-nvim-assist|
+    6. Tools .................................. |mcp-nvim-tools|
+    7. Resources .............................. |mcp-nvim-resources|
+    8. Health Check ........................... |mcp-nvim-health|
+
+==============================================================================
+1. INTRODUCTION                                         *mcp-nvim-introduction*
+
+mcp-nvim exposes a local MCP (Model Context Protocol) server over Streamable
+HTTP. External AI agents (Claude Code, Goose, Kiro) connect to your running
+Neovim instance and get full editor control: buffers, LSP, diagnostics,
+navigation, terminals, and more.
+
+The plugin also includes an ACP (Agent Client Protocol) chat UI that spawns
+an agent process and gives it access back to Neovim's MCP tools.
+
+==============================================================================
+2. SETUP                                                       *mcp-nvim-setup*
+
+                                                             *mcp-nvim.setup()*
+>lua
+    require("mcp-nvim").setup({
+      host = "127.0.0.1",           -- Listen address
+      port = 0,                     -- 0 = kernel picks free port
+      auto_start = true,            -- Start server on launch
+      allow_code_execution = true,  -- Enable lua_exec, run, etc.
+      review_edits = true,          -- Diff review before applying edits
+      log_level = "info",           -- "debug", "info", "warning", "error"
+      acp = {
+        command = "goose",
+        args = { "acp", "--with-builtin", "developer,editor" },
+        env = {},
+      },
+      chat_height = 15,             -- Chat split height in lines
+    })
+<
+
+When `port = 0`, each Neovim instance gets a unique port. Discover it with
+|:McpStatus| or |:McpUrl|. A lockfile is written to
+`$XDG_RUNTIME_DIR/mcp-nvim/<pid>.json`.
+
+==============================================================================
+3. COMMANDS                                                 *mcp-nvim-commands*
+
+:McpStart                                                          *:McpStart*
+    Start the MCP server.
+
+:McpStop                                                            *:McpStop*
+    Stop the MCP server.
+
+:McpStatus                                                        *:McpStatus*
+    Show server status, URL, and active session count.
+
+:McpUrl                                                              *:McpUrl*
+    Print the server URL. Use `:McpUrl!` to copy to clipboard.
+
+:McpSample [{text}]                                              *:McpSample*
+    Send a sampling/createMessage request to the connected client.
+
+:McpAutoComplete [{hint}]                                  *:McpAutoComplete*
+    AI code completion at cursor. Supports a range for visual mode.
+
+:McpChat                                                            *:McpChat*
+    Open the ACP chat window. Creates a session if none exist.
+
+:McpChatToggle                                                *:McpChatToggle*
+    Toggle the chat window. Session stays alive when hidden.
+
+:McpChatNew                                                      *:McpChatNew*
+    Start a new chat session in a new buffer/process.
+
+:McpChatNext                                                    *:McpChatNext*
+    Switch to the next chat session.
+
+:McpChatPrev                                                    *:McpChatPrev*
+    Switch to the previous chat session.
+
+:McpChatCancel                                                *:McpChatCancel*
+    Cancel the in-flight turn of the active chat session.
+
+:McpChatClose                                                  *:McpChatClose*
+    Close the active chat session and terminate its agent.
+
+:McpChatList                                                    *:McpChatList*
+    List active chat sessions.
+
+==============================================================================
+4. CHAT                                                         *mcp-nvim-chat*
+
+The chat UI is a bottom split buffer driven by ACP. The agent (default:
+goose) has access to all Neovim MCP tools via the running HTTP server.
+
+KEYBINDINGS (buffer-local to chat window):~
+
+    <C-s>       Send the prompt (insert or normal mode)
+    <CR>        Normal: focus the prompt. Insert: newline.
+    ]b          Jump to next block (message, tool call, status)
+    [b          Jump to previous block
+    q           Hide the chat window
+    <C-c>       Cancel the in-flight agent turn
+
+GLOBAL KEYBINDINGS:~
+
+    <leader>aa  Open the chat window
+    <leader>at  Toggle the chat window
+
+MULTILINE INPUT:~
+
+The prompt region starts at the `> ` marker and extends to the end of the
+buffer. Type normally — <CR> inserts newlines. Press <C-s> to send.
+
+MULTIPLE SESSIONS:~
+
+Use |:McpChatNew| to create additional sessions. The winbar shows tabs:
+`[1*] [2] [3]` — the active session is marked with `*`. Switch with
+|:McpChatNext|, |:McpChatPrev|, or click the tab.
+
+==============================================================================
+5. AI ASSIST                                                  *mcp-nvim-assist*
+
+When a connected MCP client supports sampling, these keybindings activate:
+
+    <leader>ac  Code completion (insert at cursor / replace selection)
+    <leader>ae  Explain code
+    <leader>af  Fix diagnostics
+    <leader>ar  Refactor (prompts for instructions)
+    <leader>av  Code review
+
+These disappear when no capable client is connected.
+
+==============================================================================
+6. TOOLS                                                       *mcp-nvim-tools*
+
+43 tools exposed via MCP `tools/list`. Major categories:
+
+Buffers:      buffer_list, buffer_get_content, buffer_open, buffer_close,
+              buffer_edit
+Files:        read_file, edit_file, write_file, list_files, search_files, run
+Navigation:   cursor_get, cursor_set, search, mark_set, mark_get
+LSP:          lsp_goto_definition, lsp_references, lsp_hover, lsp_symbols,
+              lsp_workspace_symbols, lsp_rename, lsp_code_actions
+Quickfix:     quickfix_set, quickfix_get, loclist_set
+Windows:      window_list, window_split, window_close, tab_list
+Terminal:     terminal_open, terminal_send
+Commands:     nvim_exec, nvim_eval, lua_exec, keymap_list, option_get,
+              option_set, nvim_info, notify
+
+==============================================================================
+7. RESOURCES                                               *mcp-nvim-resources*
+
+Live editor state via MCP `resources/read`:
+
+    nvim://buffers             All open buffers
+    nvim://buffer/current      Current buffer contents
+    nvim://buffer/{id}         Buffer by number
+    nvim://selection           Visual selection
+    nvim://cursor              Cursor with context
+    nvim://diagnostics         All diagnostics
+    nvim://symbols             Document symbols
+    nvim://quickfix            Quickfix list
+    nvim://git/status          Git branch and status
+
+Resources support subscriptions — clients get notified when state changes.
+
+==============================================================================
+8. HEALTH CHECK                                              *mcp-nvim-health*
+
+Run `:checkhealth mcp-nvim` to see:
+
+- Server status (running/stopped, URL, port)
+- Active MCP sessions
+- ACP agent availability (is `goose` in PATH?)
+- Chat session state
+
+==============================================================================
+vim:tw=78:ts=8:ft=help:norl:

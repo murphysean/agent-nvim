@@ -35,6 +35,12 @@ local TRIGGER_KEYWORDS = {
 --- We return an empty list and fire the AI completion immediately via vim.schedule.
 --- This avoids the confusing popup-accept dance for a single async item.
 function M.completefunc(findstart, base)
+  -- Don't fire AI completion in chat buffers.
+  local ft = vim.api.nvim_get_option_value("filetype", { buf = 0 })
+  if ft == "mcpchat" then
+    return findstart == 1 and -1 or {}
+  end
+
   if findstart == 1 then
     local line = vim.api.nvim_get_current_line()
     local col = vim.api.nvim_win_get_cursor(0)[2]

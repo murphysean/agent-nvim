@@ -244,8 +244,8 @@ function M.setup()
   vim.api.nvim_create_autocmd("LspAttach", {
     group = augroup,
     callback = function(ev)
-      local client = vim.lsp.get_client_by_id(ev.data.client_id)
-      local name = client and client.name or "unknown"
+      local clients = vim.lsp.get_clients({ id = ev.data.client_id })
+      local name = clients[1] and clients[1].name or "unknown"
       log("info", string.format("LspAttach: %s attached to buf %d", name, ev.buf))
     end,
   })
@@ -253,8 +253,8 @@ function M.setup()
   vim.api.nvim_create_autocmd("LspDetach", {
     group = augroup,
     callback = function(ev)
-      local client = vim.lsp.get_client_by_id(ev.data.client_id)
-      local name = client and client.name or "unknown"
+      local clients = vim.lsp.get_clients({ id = ev.data.client_id })
+      local name = clients[1] and clients[1].name or "unknown"
       log("info", string.format("LspDetach: %s detached from buf %d", name, ev.buf))
     end,
   })

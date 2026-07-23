@@ -90,6 +90,14 @@ function source:get_completions(context, callback)
     return
   end
 
+  -- Don't show AI completion in chat buffers — it's for code buffers only.
+  local buf = vim.api.nvim_get_current_buf()
+  local ft = vim.api.nvim_get_option_value("filetype", { buf = buf })
+  if ft == "mcpchat" then
+    callback(nil)
+    return
+  end
+
   local CompletionItemKind = require("blink.cmp.types").CompletionItemKind
 
   local keyword = get_keyword_at_cursor(context)
@@ -119,7 +127,16 @@ end
 
 --- Only show if sampling is available
 function source:should_show_items(context, items)
-  return sampling_available()
+  if not sampling_available() then
+    return false
+  end
+  -- Don't show in chat buffers.
+  local buf = vim.api.nvim_get_current_buf()
+  local ft = vim.api.nvim_get_option_value("filetype", { buf = buf })
+  if ft == "mcpchat" then
+    return false
+  end
+  return true
 end
 
 --- Execute: fires when the user accepts/confirms the AI completion item.

@@ -136,6 +136,8 @@ M.Connection = Connection
 
 --- Create an HTTP server.
 --- handler(request, connection) is called for each complete request.
+--- Returns the server handle. After listen succeeds, server:getsockname()
+--- returns the actual bound port (useful when port==0 and the kernel picks).
 function M.create_server(host, port, handler)
   local server = uv.new_tcp()
   if not server then
@@ -145,7 +147,17 @@ function M.create_server(host, port, handler)
     return nil
   end
 
-  server:bind(host, port)
+  local ok, bind_err = pcall(function()
+    server:bind(host, port)
+  end)
+  if not ok then
+    vim.schedule(function()
+      vim.notify("MCP HTTP bind error: " .. tostring(bind_err), vim.log.levels.ERROR)
+    end)
+    server:close()
+    return nil
+  end
+
   server:listen(128, function(listen_err)
     if listen_err then
       vim.schedule(function()
