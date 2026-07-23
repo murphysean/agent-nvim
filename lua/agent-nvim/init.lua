@@ -1,5 +1,5 @@
 local M = {}
-M.version = "1.0.0"
+M.version = "1.1.0"
 
 M.config = {
   host = "127.0.0.1",
