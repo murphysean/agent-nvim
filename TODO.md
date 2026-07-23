@@ -1,4 +1,4 @@
-# mcp-nvim TODO
+# agent-nvim TODO
 
 ## Features
 

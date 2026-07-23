@@ -1,10 +1,10 @@
-# mcp-nvim
+# agent-nvim
 
 <p align="center">
-  <a href="https://github.com/murphysean/mcp-nvim"><img src="https://img.shields.io/badge/github-murphysean/mcp--nvim-181717?style=flat&logo=github" alt="GitHub"></a>
+  <a href="https://github.com/murphysean/agent-nvim"><img src="https://img.shields.io/badge/github-murphysean/mcp--nvim-181717?style=flat&logo=github" alt="GitHub"></a>
   <a href="https://github.com/neovim/neovim/releases/tag/stable"><img src="https://img.shields.io/badge/Neovim-0.11-90E59A?style=flat&logo=neovim&logoColor=white" alt="Neovim"></a>
-  <a href="https://github.com/murphysean/mcp-nvim/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat" alt="License"></a>
-  <a href="https://github.com/murphysean/mcp-nvim/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/murphysean/mcp-nvim/ci.yml?style=flat&logo=githubactions&label=stylua" alt="CI"></a>
+  <a href="https://github.com/murphysean/agent-nvim/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat" alt="License"></a>
+  <a href="https://github.com/murphysean/agent-nvim/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/murphysean/agent-nvim/ci.yml?style=flat&logo=githubactions&label=stylua" alt="CI"></a>
 </p>
 
 A Neovim plugin that exposes a local MCP (Model Context Protocol) server over Streamable HTTP. External AI agents — Claude Code, Goose, Kiro CLI — connect to your running Neovim instance and get an LLM-friendly API to list directories, search files, read with line numbers, and edit with inline diffs that you review and accept before they're applied. Also exposes LSP, diagnostics, quickfix, terminals, and full Ex command access.
@@ -27,10 +27,10 @@ With sampling support, the flow also works in reverse: you press `<leader>ac` in
 
 ```lua
 {
-  "murphysean/mcp-nvim",
+  "murphysean/agent-nvim",
   lazy = false,
   config = function()
-    require("mcp-nvim").setup({
+    require("agent-nvim").setup({
       host = "127.0.0.1",
       port = 3000,
       auto_start = true,
@@ -43,11 +43,11 @@ With sampling support, the flow also works in reverse: you press `<leader>ac` in
 
 ```lua
 {
-  dir = "~/path/to/mcp-nvim",
-  name = "mcp-nvim",
+  dir = "~/path/to/agent-nvim",
+  name = "agent-nvim",
   lazy = false,
   config = function()
-    require("mcp-nvim").setup()
+    require("agent-nvim").setup()
   end,
 }
 ```
@@ -56,9 +56,9 @@ With sampling support, the flow also works in reverse: you press `<leader>ac` in
 
 ```lua
 use {
-  "murphysean/mcp-nvim",
+  "murphysean/agent-nvim",
   config = function()
-    require("mcp-nvim").setup()
+    require("agent-nvim").setup()
   end,
 }
 ```
@@ -66,7 +66,7 @@ use {
 ## Configuration
 
 ```lua
-require("mcp-nvim").setup({
+require("agent-nvim").setup({
   host = "127.0.0.1",           -- Listen address
   port = 0,                     -- 0 = kernel picks a free port (per-instance isolation)
   auto_start = true,            -- Start server when Neovim launches
@@ -79,7 +79,7 @@ require("mcp-nvim").setup({
 By default `port = 0` lets the OS pick a free port so multiple Neovim
 instances don't collide. Discover the URL for the current instance with
 `:McpStatus`, copy it with `:McpUrl!`, or read the per-instance lockfile at
-`$XDG_RUNTIME_DIR/mcp-nvim/<pid>.json` (falls back to `stdpath('state')`).
+`$XDG_RUNTIME_DIR/agent-nvim/<pid>.json` (falls back to `stdpath('state')`).
 Set `port = 3000` for a fixed port if you need a stable URL for legacy
 single-instance setups.
 
@@ -185,7 +185,7 @@ The prompt region supports multiline input — just type normally with `<CR>` fo
 ### Configuration
 
 ```lua
-require("mcp-nvim").setup({
+require("agent-nvim").setup({
   acp = {
     command = "goose",
     args = { "acp", "--with-builtin", "developer,editor" },
@@ -404,7 +404,7 @@ Available placeholders include: `{filepath}`, `{filetype}`, `{cursor_line}`, `{c
 ```
 ┌─────────────┐        HTTP POST /mcp        ┌─────────────┐
 │ Claude Code │ ──────────────────────────────▶│   Neovim    │
-│   / Goose   │ ◀──────────────────────────────│  mcp-nvim   │
+│   / Goose   │ ◀──────────────────────────────│  agent-nvim   │
 │   / Kiro    │        JSON-RPC response       │   plugin    │
 └─────────────┘                                └─────────────┘
        │                                             │
