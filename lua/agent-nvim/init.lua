@@ -12,12 +12,24 @@ M.config = {
   review_edits = true,
   log_level = "info",
   -- ACP chat: spawn config for the agent. Set to nil to disable.
+  -- No `--with-builtin` is passed: the agent gets ONLY the nvim tools exposed
+  -- through the agent-nvim MCP bridge (no developer/editor/shell builtins).
   acp = {
     command = "goose",
-    args = { "acp", "--with-builtin", "developer,editor" },
+    args = { "acp" },
     env = {},
   },
   chat_height = 15,
+  -- Chat display options.
+  chat = {
+    -- Render agent reasoning (agent_thought_chunk) in the chat buffer.
+    show_thinking = false,
+    -- Apply treesitter markdown highlighting (headings, code, bold, links) to
+    -- agent messages.
+    markdown = true,
+    -- Prefix status/tool/plan lines with emoji icons.
+    emoji = false,
+  },
 }
 
 function M.setup(opts)
@@ -92,48 +104,48 @@ function M.setup(opts)
   end, { desc = "AI-powered code completion at cursor via sampling", nargs = "?", range = true })
 
   -- ACP chat commands.
-  vim.api.nvim_create_user_command("McpChat", function()
+  vim.api.nvim_create_user_command("AcpChat", function()
     require("agent-nvim.chat").open()
-  end, { desc = "Open the mcp-chat window (creates a session if none exist)" })
+  end, { desc = "Open the acp-chat window (creates a session if none exist)" })
 
-  vim.api.nvim_create_user_command("McpChatToggle", function()
+  vim.api.nvim_create_user_command("AcpChatToggle", function()
     require("agent-nvim.chat").toggle()
-  end, { desc = "Toggle the mcp-chat window (keeps session alive when hidden)" })
+  end, { desc = "Toggle the acp-chat window (keeps session alive when hidden)" })
 
-  vim.api.nvim_create_user_command("McpChatNew", function()
+  vim.api.nvim_create_user_command("AcpChatNew", function()
     require("agent-nvim.chat").new()
-  end, { desc = "Start a new mcp-chat session in a new buffer/process" })
+  end, { desc = "Start a new acp-chat session in a new buffer/process" })
 
-  vim.api.nvim_create_user_command("McpChatNext", function()
+  vim.api.nvim_create_user_command("AcpChatNext", function()
     require("agent-nvim.chat").next()
-  end, { desc = "Switch to the next mcp-chat session" })
+  end, { desc = "Switch to the next acp-chat session" })
 
-  vim.api.nvim_create_user_command("McpChatPrev", function()
+  vim.api.nvim_create_user_command("AcpChatPrev", function()
     require("agent-nvim.chat").prev()
-  end, { desc = "Switch to the previous mcp-chat session" })
+  end, { desc = "Switch to the previous acp-chat session" })
 
-  vim.api.nvim_create_user_command("McpChatSwitch", function(cmd_opts)
+  vim.api.nvim_create_user_command("AcpChatSwitch", function(cmd_opts)
     require("agent-nvim.chat").switch(cmd_opts.args)
-  end, { desc = "Switch to a specific mcp-chat session by id", nargs = 1 })
+  end, { desc = "Switch to a specific acp-chat session by id", nargs = 1 })
 
-  vim.api.nvim_create_user_command("McpChatList", function()
+  vim.api.nvim_create_user_command("AcpChatList", function()
     vim.notify(require("agent-nvim.chat").list(), vim.log.levels.INFO)
-  end, { desc = "List active mcp-chat sessions" })
+  end, { desc = "List active acp-chat sessions" })
 
-  vim.api.nvim_create_user_command("McpChatCancel", function()
+  vim.api.nvim_create_user_command("AcpChatCancel", function()
     require("agent-nvim.chat").cancel()
-  end, { desc = "Cancel the in-flight turn of the active mcp-chat session" })
+  end, { desc = "Cancel the in-flight turn of the active acp-chat session" })
 
-  vim.api.nvim_create_user_command("McpChatClose", function()
+  vim.api.nvim_create_user_command("AcpChatClose", function()
     require("agent-nvim.chat").close()
-  end, { desc = "Close the active mcp-chat session and terminate its agent process" })
+  end, { desc = "Close the active acp-chat session and terminate its agent process" })
 
   vim.keymap.set("n", "<leader>aa", function()
     require("agent-nvim.chat").open()
-  end, { desc = "Open mcp-chat" })
+  end, { desc = "Open acp-chat" })
   vim.keymap.set("n", "<leader>at", function()
     require("agent-nvim.chat").toggle()
-  end, { desc = "Toggle mcp-chat" })
+  end, { desc = "Toggle acp-chat" })
 
   -- Spawn `goose acp` and run a single end-to-end turn:
   -- initialize -> session/new -> session/prompt -> dump streamed updates.
@@ -144,7 +156,7 @@ function M.setup(opts)
     local sess = AcpSession.new({
       spawn = {
         command = "goose",
-        args = { "acp", "--with-builtin", "developer,editor" },
+        args = { "acp" },
       },
       cwd = vim.fn.getcwd(),
       plugin_dir = M.plugin_dir(),

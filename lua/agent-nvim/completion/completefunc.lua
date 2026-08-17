@@ -37,7 +37,7 @@ local TRIGGER_KEYWORDS = {
 function M.completefunc(findstart, base)
   -- Don't fire AI completion in chat buffers.
   local ft = vim.api.nvim_get_option_value("filetype", { buf = 0 })
-  if ft == "mcpchat" then
+  if ft == "acpchat" then
     return findstart == 1 and -1 or {}
   end
 

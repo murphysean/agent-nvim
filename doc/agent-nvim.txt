@@ -41,7 +41,9 @@ an agent process and gives it access back to Neovim's MCP tools.
       log_level = "info",           -- "debug", "info", "warning", "error"
       acp = {
         command = "goose",
-        args = { "acp", "--with-builtin", "developer,editor" },
+        -- No --with-builtin: the agent gets ONLY the nvim tools via the MCP
+        -- bridge (no developer/editor/shell builtins).
+        args = { "acp" },
         env = {},
       },
       chat_height = 15,             -- Chat split height in lines
@@ -73,28 +75,28 @@ When `port = 0`, each Neovim instance gets a unique port. Discover it with
 :McpAutoComplete [{hint}]                                  *:McpAutoComplete*
     AI code completion at cursor. Supports a range for visual mode.
 
-:McpChat                                                            *:McpChat*
+:AcpChat                                                            *:AcpChat*
     Open the ACP chat window. Creates a session if none exist.
 
-:McpChatToggle                                                *:McpChatToggle*
+:AcpChatToggle                                                *:AcpChatToggle*
     Toggle the chat window. Session stays alive when hidden.
 
-:McpChatNew                                                      *:McpChatNew*
+:AcpChatNew                                                      *:AcpChatNew*
     Start a new chat session in a new buffer/process.
 
-:McpChatNext                                                    *:McpChatNext*
+:AcpChatNext                                                    *:AcpChatNext*
     Switch to the next chat session.
 
-:McpChatPrev                                                    *:McpChatPrev*
+:AcpChatPrev                                                    *:AcpChatPrev*
     Switch to the previous chat session.
 
-:McpChatCancel                                                *:McpChatCancel*
+:AcpChatCancel                                                *:AcpChatCancel*
     Cancel the in-flight turn of the active chat session.
 
-:McpChatClose                                                  *:McpChatClose*
+:AcpChatClose                                                  *:AcpChatClose*
     Close the active chat session and terminate its agent.
 
-:McpChatList                                                    *:McpChatList*
+:AcpChatList                                                    *:AcpChatList*
     List active chat sessions.
 
 ==============================================================================
@@ -124,9 +126,28 @@ buffer. Type normally — <CR> inserts newlines. Press <C-s> to send.
 
 MULTIPLE SESSIONS:~
 
-Use |:McpChatNew| to create additional sessions. The winbar shows tabs:
+Use |:AcpChatNew| to create additional sessions. The winbar shows tabs:
 `[1*] [2] [3]` — the active session is marked with `*`. Switch with
-|:McpChatNext|, |:McpChatPrev|, or click the tab.
+|:AcpChatNext|, |:AcpChatPrev|, or click the tab.
+
+DISPLAY OPTIONS:~
+
+The chat is terse by default: thinking/reasoning is hidden, agent messages
+are rendered as markdown (headings, bold, inline code, and syntax-highlighted
+fenced code blocks), and no emoji prefixes are shown. Tool calls collapse to
+a single updating line. Configure via |agent-nvim-setup|:
+
+    setup({
+      chat = {
+        show_thinking = false,  -- show agent reasoning messages
+        markdown = true,        -- treesitter markdown highlighting
+        emoji = false,          -- emoji icons on status/tool/plan lines
+      },
+    })
+
+Setting |markdown = false| restores the legacy emoji-prefixed, plain-text
+streaming. Setting |emoji = true| adds emoji icons to status, plan, and tool
+lines (the message body stays raw markdown when markdown is enabled).
 
 ==============================================================================
 5. AI ASSIST                                                  *agent-nvim-assist*

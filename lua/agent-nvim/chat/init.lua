@@ -14,7 +14,8 @@ local function default_spawn()
   local acp_cfg = cfg.acp or {}
   return {
     command = acp_cfg.command or "goose",
-    args = acp_cfg.args or { "acp", "--with-builtin", "developer,editor" },
+    -- No builtins: the agent gets ONLY the nvim tools via the MCP bridge.
+    args = acp_cfg.args or { "acp" },
     env = acp_cfg.env or {},
   }
 end
@@ -42,9 +43,16 @@ local function on_update(chat, params)
   vim.schedule(function()
     local update = params and params.update or {}
     local kind = update.sessionUpdate
-    if kind == "agent_message_chunk" or kind == "agent_thought_chunk" then
+    if kind == "agent_thought_chunk" then
+      -- Thinking/reasoning is hidden by default for a terse chat.
+      if not ui.opts(chat).show_thinking then
+        return
+      end
       local text = update.content and update.content.text or ""
-      ui.stream_text(chat, kind, text)
+      ui.stream_text(chat, kind, text, update.messageId)
+    elseif kind == "agent_message_chunk" then
+      local text = update.content and update.content.text or ""
+      ui.stream_text(chat, kind, text, update.messageId)
     elseif kind == "user_message_chunk" then
       -- Echo from agent (e.g., on session/load replay) — already rendered.
     elseif kind == "tool_call" or kind == "tool_call_update" then
@@ -85,27 +93,27 @@ function M.new()
   vim.keymap.set({ "n", "i" }, "<C-s>", function()
     vim.cmd("stopinsert")
     M.submit()
-  end, { buffer = buf, desc = "mcp-chat: send prompt" })
+  end, { buffer = buf, desc = "acp-chat: send prompt" })
 
   vim.keymap.set("n", "<CR>", function()
     ui.focus_prompt()
-  end, { buffer = buf, desc = "mcp-chat: focus prompt" })
+  end, { buffer = buf, desc = "acp-chat: focus prompt" })
 
   vim.keymap.set("n", "]b", function()
     ui.jump_next_block(chat)
-  end, { buffer = buf, desc = "mcp-chat: next block" })
+  end, { buffer = buf, desc = "acp-chat: next block" })
 
   vim.keymap.set("n", "[b", function()
     ui.jump_prev_block(chat)
-  end, { buffer = buf, desc = "mcp-chat: previous block" })
+  end, { buffer = buf, desc = "acp-chat: previous block" })
 
   vim.keymap.set("n", "q", function()
     ui.hide()
-  end, { buffer = buf, desc = "mcp-chat: hide window" })
+  end, { buffer = buf, desc = "acp-chat: hide window" })
 
   vim.keymap.set("n", "<C-c>", function()
     M.cancel()
-  end, { buffer = buf, desc = "mcp-chat: cancel turn" })
+  end, { buffer = buf, desc = "acp-chat: cancel turn" })
 
   -- Build the ACP session.
   local sess = AcpSession.new({
@@ -209,7 +217,7 @@ end
 
 function M.switch(chat_id)
   if not sessions.get(chat_id) then
-    vim.notify("mcp-chat: no session " .. tostring(chat_id), vim.log.levels.WARN)
+    vim.notify("acp-chat: no session " .. tostring(chat_id), vim.log.levels.WARN)
     return
   end
   sessions.set_active(chat_id)

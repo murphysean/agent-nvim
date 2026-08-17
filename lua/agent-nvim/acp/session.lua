@@ -191,12 +191,14 @@ function Session:start(cb)
   end
 
   -- initialize
+  -- NOTE: we deliberately do NOT advertise fs/terminal capabilities. If we
+  -- did, goose's ACP server would inject its "developer" client (read/write/
+  -- edit/shell tools) on top of our MCP bridge. We want the agent to use ONLY
+  -- the nvim tools exposed through the agent-nvim MCP server, so we leave
+  -- these capabilities unset.
   self._conn:request("initialize", {
     protocolVersion = PROTOCOL_VERSION,
-    clientCapabilities = {
-      fs = { readTextFile = true, writeTextFile = true },
-      terminal = true,
-    },
+    clientCapabilities = {},
     clientInfo = self._opts.client_info or { name = "agent-nvim", version = "1.0.0" },
   }, function(result, err)
     if err then

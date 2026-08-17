@@ -93,15 +93,15 @@ single-instance setups.
 | `:McpUrl`          | Print the MCP server URL (`:McpUrl!` copies to clipboard) |
 | `:McpSample`       | Send a sampling/createMessage request    |
 | `:McpAutoComplete` | AI code completion at cursor (normal/visual) |
-| `:McpChat`         | Open the ACP chat window                 |
-| `:McpChatToggle`   | Toggle chat window (session stays alive) |
-| `:McpChatNew`      | Start a new chat session                 |
-| `:McpChatNext`     | Switch to next chat session              |
-| `:McpChatPrev`     | Switch to previous chat session          |
-| `:McpChatSwitch`   | Switch to a specific chat session by ID  |
-| `:McpChatCancel`   | Cancel the in-flight agent turn          |
-| `:McpChatClose`    | Close the active chat session            |
-| `:McpChatList`     | List active chat sessions                |
+| `:AcpChat`         | Open the ACP chat window                 |
+| `:AcpChatToggle`   | Toggle chat window (session stays alive) |
+| `:AcpChatNew`      | Start a new chat session                 |
+| `:AcpChatNext`     | Switch to next chat session              |
+| `:AcpChatPrev`     | Switch to previous chat session          |
+| `:AcpChatSwitch`   | Switch to a specific chat session by ID  |
+| `:AcpChatCancel`   | Cancel the in-flight agent turn          |
+| `:AcpChatClose`    | Close the active chat session            |
+| `:AcpChatList`     | List active chat sessions                |
 
 ## AI Assist (Sampling)
 
@@ -142,7 +142,7 @@ These are claimed dynamically per-buffer and released when the client disconnect
 
 The plugin includes a built-in chat UI powered by the [Agent Client Protocol](https://agentclientprotocol.com/) (ACP). It spawns an agent (default: `goose acp`) and gives it access back to your Neovim instance via the MCP HTTP server.
 
-Open with `:McpChat` or `<leader>aa`. Toggle with `<leader>at`.
+Open with `:AcpChat` or `<leader>aa`. Toggle with `<leader>at`.
 
 ### Chat Keybindings
 
@@ -162,20 +162,20 @@ These are buffer-local to the chat window:
 
 ```
 ┌─────────────────────────────────────────────┐
-│  mcp-chat [1*] [2]                          │  ← winbar tabs
+│  acp-chat [1*] [2]                          │  ← winbar tabs
 ├─────────────────────────────────────────────┤
-│ # mcp-chat session 1                        │
+│ # acp-chat session 1                        │
 │                                             │
-│  session ready (id=abc123)                 │
+│  session ready (id=abc123)                  │
 │                                             │
 │  you:                                       │
 │   Fix the error in main.rs                  │
 │                                             │
-│ ◐  Edit src/main.rs                        │
+│ ◐  Edit src/main.rs                         │
 │                                             │
 │   Done. Fixed the type mismatch on line 42. │
 │                                             │
-│  [turn end: end_turn]                      │
+│  [turn end: end_turn]                       │
 │                                             │
 │ > _                          [C-s to send]  │  ← prompt region
 └─────────────────────────────────────────────┘
@@ -189,7 +189,9 @@ The prompt region supports multiline input — just type normally with `<CR>` fo
 require("agent-nvim").setup({
   acp = {
     command = "goose",
-    args = { "acp", "--with-builtin", "developer,editor" },
+    -- No --with-builtin: the agent gets ONLY the nvim tools via the MCP
+    -- bridge (no developer/editor/shell builtins).
+    args = { "acp" },
     env = {},
   },
   chat_height = 15,  -- height of the chat split in lines

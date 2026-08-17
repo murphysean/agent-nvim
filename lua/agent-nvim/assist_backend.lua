@@ -80,8 +80,9 @@ local function via_acp(system_prompt, user_text, callback)
     },
     cwd = vim.fn.getcwd(),
     plugin_dir = plugin.plugin_dir(),
-    -- Skip the bridge for one-shot assist: the agent has its own builtin
-    -- developer/editor extensions, and avoiding the bridge cuts startup.
+    -- Skip the bridge for one-shot assist: it's a quick inline answer, and
+    -- avoiding the bridge cuts startup. The agent still gets the nvim tools
+    -- via the MCP bridge when the chat UI is used.
     include_bridge = false,
     spawn_id = "assist-oneshot",
     client_info = { name = "agent-nvim-assist", version = plugin.version },

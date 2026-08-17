@@ -93,7 +93,7 @@ function source:get_completions(context, callback)
   -- Don't show AI completion in chat buffers — it's for code buffers only.
   local buf = vim.api.nvim_get_current_buf()
   local ft = vim.api.nvim_get_option_value("filetype", { buf = buf })
-  if ft == "mcpchat" then
+  if ft == "acpchat" then
     callback(nil)
     return
   end
@@ -133,7 +133,7 @@ function source:should_show_items(context, items)
   -- Don't show in chat buffers.
   local buf = vim.api.nvim_get_current_buf()
   local ft = vim.api.nvim_get_option_value("filetype", { buf = buf })
-  if ft == "mcpchat" then
+  if ft == "acpchat" then
     return false
   end
   return true

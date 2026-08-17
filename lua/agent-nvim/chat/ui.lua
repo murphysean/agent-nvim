@@ -13,10 +13,11 @@
 --- the user can see and click between them.
 
 local sessions = require("agent-nvim.chat.sessions")
+local markdown = require("agent-nvim.chat.markdown")
 
 local M = {}
 
-local NS = vim.api.nvim_create_namespace("mcp_chat_ui")
+local NS = vim.api.nvim_create_namespace("acp_chat_ui")
 local PROMPT_PREFIX = "[C-s] > "
 
 local STATUS_ICON = {
@@ -38,6 +39,25 @@ local KIND_ICON = {
   other = "•",
 }
 
+--- Resolve chat display options, honoring per-chat overrides.
+function M.opts(chat)
+  local cfg = require("agent-nvim").config.chat or {}
+  if chat and chat.opts then
+    return vim.tbl_extend("force", cfg, chat.opts)
+  end
+  return cfg
+end
+
+local function chat_opts(chat)
+  return M.opts(chat)
+end
+
+--- Emoji prefix helper. When emojis are disabled, returns the (possibly empty)
+--- plain marker so lines stay terse.
+local function use_emoji(chat)
+  return chat_opts(chat).emoji ~= false
+end
+
 --- Record a block boundary. Blocks shift as lines are inserted above them,
 --- so we store extmarks (which track through insertions) rather than raw
 --- line numbers. The blocks list is ordered by creation time.
@@ -47,8 +67,11 @@ function M.add_block(chat, kind, row)
   if not vim.api.nvim_buf_is_valid(buf) then
     return
   end
-  local mark_id = vim.api.nvim_buf_set_extmark(buf, NS, row, 0, {})
+  -- Anchor the mark to the TOP of the block (left gravity) so lines inserted
+  -- below it (as the block grows) don't push the mark down.
+  local mark_id = vim.api.nvim_buf_set_extmark(buf, NS, row, 0, { right_gravity = false })
   table.insert(chat.blocks, { kind = kind, mark = mark_id })
+  return #chat.blocks
 end
 
 --- Get the (0-indexed) line of a block by index in chat.blocks.
@@ -100,7 +123,7 @@ function M.jump_prev_block(chat)
 end
 
 --- Create a new chat buffer (not yet attached to a session).
-local PROMPT_MARK_NS = vim.api.nvim_create_namespace("mcp_chat_prompt")
+local PROMPT_MARK_NS = vim.api.nvim_create_namespace("acp_chat_prompt")
 
 --- Get the 0-indexed line where the prompt region starts.
 --- The prompt mark is set when the buffer is created and stays anchored
@@ -114,13 +137,26 @@ local function prompt_start_index(buf)
   return vim.api.nvim_buf_line_count(buf) - 1
 end
 
+--- Get the exclusive end row of a block: the start of the next block, or the
+--- prompt start if this is the last block. Used so each block is rendered as
+--- its own markdown document (see _render_agent_markdown), preventing an
+--- unclosed construct in one block from swallowing the highlighting of the
+--- blocks that follow it.
+local function block_end_row(chat, idx)
+  local next_row = block_line(chat, idx + 1)
+  if next_row then
+    return next_row
+  end
+  return prompt_start_index(chat.buf)
+end
+
 function M.create_buffer(chat_id)
   local buf = vim.api.nvim_create_buf(false, true)
-  vim.api.nvim_buf_set_name(buf, "mcp-chat://" .. chat_id)
+  vim.api.nvim_buf_set_name(buf, "acp-chat://" .. chat_id)
   vim.api.nvim_set_option_value("buftype", "nofile", { buf = buf })
   vim.api.nvim_set_option_value("bufhidden", "hide", { buf = buf })
   vim.api.nvim_set_option_value("swapfile", false, { buf = buf })
-  vim.api.nvim_set_option_value("filetype", "mcpchat", { buf = buf })
+  vim.api.nvim_set_option_value("filetype", "acpchat", { buf = buf })
   -- Disable completion in chat buffers — the prompt is for typing to the
   -- agent, not for code completion. These buffer variables are checked by
   -- blink.cmp (vim.b.completion) and nvim-cmp (vim.b.cmp_enabled).
@@ -129,7 +165,7 @@ function M.create_buffer(chat_id)
 
   -- Initial layout: a header line + a blank line + the prompt line.
   vim.api.nvim_buf_set_lines(buf, 0, -1, false, {
-    "# mcp-chat session " .. chat_id,
+    "# acp-chat session " .. chat_id,
     "",
     PROMPT_PREFIX,
   })
@@ -168,30 +204,157 @@ end
 ---   3. The remainder after the last \n becomes the new open-line content.
 ---
 --- The first time we stream after a non-stream event, we insert a fresh
---- header line ("" or "") and make it the open line.
+--- header line and make it the open line. The agent message body is raw
+--- markdown, so the prefix is dropped from the open line and the whole block
+--- is highlighted by the markdown renderer.
 local AGENT_PREFIX = "🤖 "
 local THOUGHT_PREFIX = "💭 "
 
-function M.stream_text(chat, kind, text)
+local function stream_prefix(chat, kind)
+  local opts = chat_opts(chat)
+  -- When markdown rendering is on, the message body is parsed as raw markdown,
+  -- so prepending an emoji prefix would corrupt headings/code. No prefix then.
+  if opts.markdown ~= false then
+    return ""
+  end
+  if kind == "agent_thought_chunk" then
+    return opts.emoji ~= false and THOUGHT_PREFIX or ""
+  end
+  return opts.emoji ~= false and AGENT_PREFIX or ""
+end
+
+--- Set the chat window's conceal options so markdown delimiters (**, `, ...)
+--- hide when markdown rendering is on.
+function M._apply_conceal(win, chat)
+  if not win or not vim.api.nvim_win_is_valid(win) then
+    return
+  end
+  local level = M.opts(chat).markdown == false and 0 or 2
+  pcall(vim.api.nvim_set_option_value, "conceallevel", level, { win = win })
+  pcall(vim.api.nvim_set_option_value, "concealcursor", "nc", { win = win })
+end
+
+--- Re-render a streamed agent block's markdown, if enabled. The block spans
+--- rows [block_line, prompt_start). Throttled so we don't re-parse on every
+--- tiny chunk.
+function M._render_agent_markdown(chat, block_idx)
+  local opts = chat_opts(chat)
+  if opts.markdown == false then
+    return
+  end
+  if not chat.blocks or not block_idx then
+    return
+  end
   local buf = chat.buf
-  if not vim.api.nvim_buf_is_valid(buf) or text == "" then
+  if not vim.api.nvim_buf_is_valid(buf) then
+    return
+  end
+  local start_row = block_line(chat, block_idx)
+  if not start_row then
+    return
+  end
+  -- Render ONLY this block's rows as its own markdown document. Rendering from
+  -- the block start all the way to the prompt would span multiple blocks; an
+  -- unclosed code fence (or other construct) in an earlier block would then
+  -- swallow the highlighting of every block after it.
+  local end_row = block_end_row(chat, block_idx)
+  if end_row <= start_row then
+    return
+  end
+  markdown.apply(buf, start_row, end_row)
+end
+
+--- In markdown mode, rewrite the open agent block with the accumulated message.
+--- The block is a single contiguous region [block_line, prompt_start); we
+--- replace its current lines with the message split into lines.
+function M._rewrite_agent_block(chat)
+  local block_idx = chat.stream_block_idx
+  if not block_idx then
+    return
+  end
+  local buf = chat.buf
+  if not vim.api.nvim_buf_is_valid(buf) then
+    return
+  end
+  local start_row = block_line(chat, block_idx)
+  if not start_row then
+    return
+  end
+  local end_row = prompt_start_index(buf)
+  if start_row >= end_row then
+    return
+  end
+  local lines = vim.split(chat.stream_buffer or "", "\n", { plain = true })
+  -- A trailing newline yields a trailing empty line; drop it so the message
+  -- ends cleanly at the prompt / next block.
+  while #lines > 0 and lines[#lines] == "" do
+    table.remove(lines)
+  end
+  vim.api.nvim_buf_set_lines(buf, start_row, end_row, false, lines)
+end
+
+--- Throttle live markdown re-rendering while text keeps streaming.
+function M._schedule_markdown_render(chat)
+  local block_idx = chat.stream_block_idx
+  if not block_idx or chat._md_timer then
+    return
+  end
+  local now = vim.loop.hrtime() / 1e6 -- ms
+  if (chat._md_last or 0) > now - 150 then
+    return
+  end
+  chat._md_last = now
+  chat._md_timer = vim.fn.timer_start(120, function()
+    chat._md_timer = nil
+    -- Skip if the stream moved on (a fresh block or the final render).
+    if chat.stream_block_idx == block_idx then
+      M._render_agent_markdown(chat, block_idx)
+    end
+  end)
+end
+
+function M.stream_text(chat, kind, text, message_id)
+  local buf = chat.buf
+  if not vim.api.nvim_buf_is_valid(buf) then
     return
   end
 
-  if chat.stream_kind ~= kind then
+  -- A new message starts when the stream kind OR the message id changes.
+  if chat.stream_kind ~= kind or (message_id ~= nil and chat.stream_msg_id ~= message_id) then
+    -- Finalize the previous message's markdown before starting a new block.
+    if chat.stream_kind ~= nil and chat.stream_kind ~= "agent_thought_chunk" then
+      M._render_agent_markdown(chat, chat.stream_block_idx)
+    end
     -- Start a new streamed block.
-    local header = kind == "agent_thought_chunk" and "💭" or "🤖"
-    local row = M.insert_above_prompt(buf, { header })
+    local row = M.insert_above_prompt(buf, { "" })
     chat.stream_kind = kind
+    chat.stream_msg_id = message_id
     chat.stream_line = prompt_start_index(buf) - 1
     chat.stream_buffer = ""
-    chat.stream_prefix = kind == "agent_thought_chunk" and THOUGHT_PREFIX or AGENT_PREFIX
+    chat.stream_prefix = stream_prefix(chat, kind)
+    chat.stream_block_idx = nil
     if row then
       local block_type = kind == "agent_thought_chunk" and "thought" or "agent"
-      M.add_block(chat, block_type, row)
+      chat.stream_block_idx = M.add_block(chat, block_type, row)
     end
   end
 
+  if text == "" then
+    -- A boundary-only chunk (new messageId, no text): nothing to append.
+    return
+  end
+
+  if chat_opts(chat).markdown ~= false and kind ~= "agent_thought_chunk" then
+    -- Markdown mode: accumulate the WHOLE message and rewrite the block region
+    -- in place (throttled). This keeps code fences and structure intact across
+    -- arbitrary chunk boundaries.
+    chat.stream_buffer = (chat.stream_buffer or "") .. text
+    M._rewrite_agent_block(chat)
+    M._schedule_markdown_render(chat)
+    return
+  end
+
+  -- Non-markdown mode: incremental per-line streaming with emoji prefix.
   local combined = (chat.stream_buffer or "") .. text
   local last_nl = nil
   -- Find the last newline in the combined string.
@@ -241,16 +404,24 @@ end
 
 --- End the current streamed block so the next chunk starts fresh.
 function M.end_stream(chat)
+  if chat._md_timer then
+    vim.fn.timer_stop(chat._md_timer)
+    chat._md_timer = nil
+  end
+  -- Finalize markdown for the just-finished agent block.
+  if chat.stream_kind ~= "agent_thought_chunk" then
+    M._render_agent_markdown(chat, chat.stream_block_idx)
+  end
   chat.stream_kind = nil
   chat.stream_line = nil
   chat.stream_buffer = nil
+  chat.stream_block_idx = nil
+  chat.stream_msg_id = nil
 end
 
-local function format_tool_label(update)
+local function format_tool_label(chat, update)
   -- ACP tool_call may include title, kind, and locations.
   local kind = update.kind or "other"
-  local kicon = KIND_ICON[kind] or KIND_ICON.other
-  local sicon = STATUS_ICON[update.status or "pending"] or "?"
   local title = update.title or "tool call"
   -- Prefer location path or first diff path if title is generic.
   if update.locations and #update.locations > 0 and update.locations[1].path then
@@ -263,6 +434,14 @@ local function format_tool_label(update)
       end
     end
   end
+
+  if not use_emoji(chat) then
+    -- Terse plain line: a single status glyph followed by the title.
+    local sicon = STATUS_ICON[update.status or "pending"] or "?"
+    return string.format("%s %s", sicon, title)
+  end
+  local kicon = KIND_ICON[kind] or KIND_ICON.other
+  local sicon = STATUS_ICON[update.status or "pending"] or "?"
   return string.format("%s %s %s", sicon, kicon, title)
 end
 
@@ -279,7 +458,7 @@ function M.render_tool_call(chat, update)
   end
 
   chat.tool_lines = chat.tool_lines or {}
-  local label = format_tool_label(update)
+  local label = format_tool_label(chat, update)
 
   if not chat.tool_lines[id] then
     -- First sighting: append a single line above the prompt.
@@ -301,7 +480,7 @@ function M.render_tool_call(chat, update)
     for k, v in pairs(update) do
       entry.last_update[k] = v
     end
-    label = format_tool_label(entry.last_update)
+    label = format_tool_label(chat, entry.last_update)
     if entry.line then
       M.replace_line(buf, entry.line, label)
     else
@@ -323,7 +502,8 @@ function M.render_plan(chat, plan_entries)
   if not vim.api.nvim_buf_is_valid(buf) then
     return
   end
-  local lines = { "📋 Plan:" }
+  local header = use_emoji(chat) and "📋 Plan:" or "Plan:"
+  local lines = { header }
   for _, e in ipairs(plan_entries or {}) do
     local mark = "○"
     if e.status == "completed" then
@@ -350,7 +530,8 @@ function M.append_user_prompt(chat, text)
   if not vim.api.nvim_buf_is_valid(buf) then
     return
   end
-  local lines = { " you:" }
+  local header = use_emoji(chat) and " you:" or "you:"
+  local lines = { header }
   for _, t in ipairs(vim.split(text, "\n", { plain = true })) do
     table.insert(lines, "  " .. t)
   end
@@ -367,7 +548,8 @@ function M.append_status(chat, text)
   if not vim.api.nvim_buf_is_valid(buf) then
     return
   end
-  local row = M.insert_above_prompt(buf, { "ℹ " .. text })
+  local prefix = use_emoji(chat) and "ℹ " or ""
+  local row = M.insert_above_prompt(buf, { prefix .. text })
   if row then
     M.add_block(chat, "status", row)
   end
@@ -377,9 +559,9 @@ local function chat_winbar()
   local list = sessions.list()
   local active = sessions.active()
   if #list == 0 then
-    return "%#WinBar# mcp-chat %*"
+    return "%#WinBar# acp-chat %*"
   end
-  local parts = { "%#WinBar# mcp-chat " }
+  local parts = { "%#WinBar# acp-chat " }
   for _, c in ipairs(list) do
     if not c then
       -- skip stale entry
@@ -405,6 +587,7 @@ function M.show()
     vim.api.nvim_win_set_buf(win, active.buf)
     vim.api.nvim_set_current_win(win)
     pcall(vim.api.nvim_set_option_value, "winbar", chat_winbar(), { win = win })
+    M._apply_conceal(win, active)
     return
   end
   -- Open a new bottom split (15 lines tall by default).
@@ -413,6 +596,7 @@ function M.show()
   vim.api.nvim_win_set_buf(win, active.buf)
   pcall(vim.api.nvim_set_option_value, "winbar", chat_winbar(), { win = win })
   pcall(vim.api.nvim_set_option_value, "winfixheight", true, { win = win })
+  M._apply_conceal(win, active)
   sessions.set_window(win)
 end
 
