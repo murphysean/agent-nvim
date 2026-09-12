@@ -27,8 +27,38 @@ M.config = {
     -- Apply treesitter markdown highlighting (headings, code, bold, links) to
     -- agent messages.
     markdown = true,
+    -- Re-highlight the message as it streams. Text is written raw in either
+    -- case and markdown is applied on top via extmarks; disable this to apply
+    -- it only once the message is complete (calmer for long answers, at the
+    -- cost of showing raw ** and ` markers while it arrives).
+    live_markdown = true,
     -- Prefix status/tool/plan lines with emoji icons.
     emoji = false,
+    -- Render each tool call as two lines — "Tool Call:" when the call starts
+    -- and "Tool Result:" when it finishes — so calls and their outcomes stay
+    -- in the order they happened. Set false for the legacy single-line card
+    -- that gets rewritten in place.
+    tool_output = true,
+    -- Wrap each batch of tool calls in a ruled card with ▸ / ◂ direction
+    -- arrows and a few preview lines of the result. Set false for plain
+    -- "Tool Call:"/"Tool Result:" lines.
+    tool_cards = true,
+    -- Lines of result body shown inside a card before eliding.
+    tool_preview_lines = 3,
+    -- Show the ▸ (call) / ◂ (result) direction arrows.
+    card_arrows = true,
+    -- Rule drawn between turns (and between agent-loop steps within a turn).
+    -- Set to "" to disable.
+    step_separator = "─",
+    -- Rule geometry. Rules are a fixed width and indented rather than sized to
+    -- the window, so the transcript stays stable when the window is resized.
+    rule_width = 40,
+    rule_indent = 2,
+    -- Rule character, shared by the turn card and tool cards.
+    rule_char = "─",
+    -- Gutter bar marking the user's prompt, distinguishing it from the agent's
+    -- reply. Set to "" to disable.
+    prompt_gutter = "│",
   },
 }
 

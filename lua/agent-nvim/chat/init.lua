@@ -169,6 +169,8 @@ function M.submit()
   end
   -- Drop out of insert mode.
   vim.cmd("stopinsert")
+  -- The history may already contain a prior turn; separate this one from it.
+  chat.needs_sep = true
   ui.append_user_prompt(chat, text)
   chat.session:prompt({ { type = "text", text = text } }, function(err, stop_reason)
     vim.schedule(function()
@@ -177,6 +179,10 @@ function M.submit()
       else
         ui.append_status(chat, "[turn end: " .. tostring(stop_reason) .. "]")
       end
+      -- Close the turn's card so the next turn starts its own.
+      ui.end_turn(chat)
+      -- Keep the completed turn visually distinct from whatever comes next.
+      chat.needs_sep = true
       ui.focus_prompt()
     end)
   end)

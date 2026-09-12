@@ -168,20 +168,151 @@ These are buffer-local to the chat window:
 │                                             │
 │  session ready (id=abc123)                  │
 │                                             │
-│  you:                                       │
-│   Fix the error in main.rs                  │
-│                                             │
-│ ◐  Edit src/main.rs                         │
+│   ────────────────────────────────────────  │
+│ │ you:                                      │
+│ │ Fix the error in main.rs                  │
+│   ────────────────────────────────────────  │
+│   ▸ read_file (path: src/main.rs)           │
+│   ▸ edit_file (path: src/main.rs)           │
+│   ◂ read_file (result: 42 lines total)      │
+│       1  use std::io;                       │
+│   ◂ edit_file (diff: src/main.rs)           │
+│   ────────────────────────────────────────  │
 │                                             │
 │   Done. Fixed the type mismatch on line 42. │
 │                                             │
 │  [turn end: end_turn]                       │
+│   ────────────────────────────────────────  │
 │                                             │
 │ > _                          [C-s to send]  │  ← prompt region
 └─────────────────────────────────────────────┘
 ```
 
 The prompt region supports multiline input — just type normally with `<CR>` for newlines, then `<C-s>` to send.
+
+#### Tool call output
+
+Each batch of tool calls renders as a ruled card, with `▸` marking calls going
+out to a tool and `◂` marking results coming back. This mirrors goose CLI:
+
+```
+─────────────────────────────────────────────────────────
+  ▸ read_file (path: src/main.rs, lines: 12-40)
+  ▸ run (command: cargo test)
+  ◂ run (result: exit_code: 0, stdout: test result: ok.)
+    test result: ok. 412 passed
+    running 412 tests
+    … (3 more lines)
+  ◂ read_file (result: File: src/main.rs (562 lines total))
+    File: src/main.rs (562 lines total)
+      12	fn main() {
+    … (2 more lines)
+─────────────────────────────────────────────────────────
+```
+
+Calls issued together share one card — they are one batch of the agent's loop —
+and their results append inside it as they arrive, so a batch completing out of
+order still reads correctly. The closing rule is drawn once every call in the
+batch has reported, which marks the block's full extent.
+
+Each result shows a one-line summary plus a few preview lines of the body.
+Arguments are summarized onto a single line, preferring the key that identifies
+what the call touches (`path`, `command`, `query`, …) and skipping source-text
+arguments like `old_string`/`new_string`. Summaries and previews are clipped to
+the window's text width, so no line ever wraps. Failures render as
+`◂ tool (failed: <message>)`.
+
+```lua
+require("agent-nvim").setup({
+  chat = {
+    tool_cards = true,        -- ruled cards with ▸ / ◂ arrows
+    tool_preview_lines = 3,   -- result lines shown before eliding
+    card_arrows = true,       -- show the ▸ / ◂ direction arrows
+  },
+})
+```
+
+Set `tool_cards = false` for plain `Tool Call:` / `Tool Result:` lines.
+
+#### Layout, cards and separators
+
+The transcript is built from **fixed-width, indented rules**. They are a
+constant 40 characters (indented by 2), not sized to the window, so resizing
+Neovim never leaves mismatched or wrapped rules behind.
+
+```
+  ────────────────────────────────────────
+│ you:
+│ Introduce yourself, then list the lua files.
+I'm goose, an open-source AI agent by AAIF — let me look at that directory.
+  ────────────────────────────────────────
+  ▸ shell (command: ls -la lua/agent-nvim/chat/)
+  ◂ shell (result: total 8)
+    total 8
+    … (4 more lines)
+  ────────────────────────────────────────
+Here's what's there:
+  ────────────────────────────────────────
+[turn end: end_turn]
+  ────────────────────────────────────────
+```
+
+Rules mark the edges of each block:
+
+- **Your prompt** opens a card, marked with a `│` gutter bar so it never reads
+  as a continuation of the agent's prose. The bar is at a fixed column, so it
+  survives a resize.
+- **Each tool batch** gets its own card, opened when the batch starts and closed
+  once every call in it has reported.
+- **The turn** closes with a rule after the turn-end status line.
+
+The turn's reasoning and message sit between the prompt's card and the first
+tool card — which is why the agent's reply reads as belonging to your message.
+
+With `tool_cards = false` there are no tool cards, so a rule is instead drawn at
+each agent-loop step (a new assistant `messageId`), keeping the steps visible.
+
+```lua
+require("agent-nvim").setup({
+  chat = {
+    rule_width = 40,       -- rule length, in characters
+    rule_indent = 2,       -- columns of indent before each rule
+    rule_char = "─",       -- rule character, or "" to disable rules
+    prompt_gutter = "│",   -- gutter bar on your prompt, or "" to disable
+  },
+})
+```
+
+#### Line categories
+
+Each kind of line gets its own highlight group, so the transcript is scannable
+at a glance. The groups are *linked* to standard ones, so they follow your
+colorscheme; define any of them yourself to override (yours wins):
+
+| Content | Group | Linked to |
+|---|---|---|
+| Status / meta (`spawning agent…`, `session ready`, `[turn end: …]`) | `AgentNvimMeta` | `Comment` |
+| Your prompt | `AgentNvimUser` | `Title` |
+| `Tool Call:` lines | `AgentNvimToolCall` | `Function` |
+| `Tool Result:` lines | `AgentNvimToolResult` | `Comment` |
+| Failed tool results | `AgentNvimToolError` | `DiagnosticError` |
+| Step separator rule | `AgentNvimSeparator` | `NonText` |
+
+```lua
+-- e.g. make your own prompt stand out
+vim.api.nvim_set_hl(0, "AgentNvimUser", { link = "DiagnosticInfo", bold = true })
+```
+
+#### Streaming
+
+Agent text is written to the buffer raw as chunks arrive; markdown is applied
+*on top* of that text via extmarks, which is what lets the highlighting be
+recomputed in place without touching the underlying text.
+
+By default the message is re-highlighted as it streams (throttled to ~120ms).
+Set `live_markdown = false` to leave the text raw while it arrives and apply
+markdown once, when the message is complete — calmer for long answers, at the
+cost of showing raw `**` and `` ` `` markers until it finishes.
 
 ### Configuration
 
@@ -195,6 +326,19 @@ require("agent-nvim").setup({
     env = {},
   },
   chat_height = 15,  -- height of the chat split in lines
+  chat = {
+    show_thinking = false,  -- render agent reasoning
+    markdown = true,        -- treesitter highlighting for agent messages
+    live_markdown = true,   -- re-highlight while streaming
+    emoji = false,          -- prefix lines with icons
+    tool_cards = true,        -- ruled cards with ▸ / ◂ arrows per batch
+    tool_preview_lines = 3,   -- result lines shown inside a card
+    card_arrows = true,     -- show the ▸ / ◂ direction arrows
+    rule_width = 40,        -- rule length, in characters
+    rule_indent = 2,        -- indent before each rule
+    rule_char = "─",        -- rule character, or "" to disable rules
+    prompt_gutter = "│",    -- gutter bar on your prompt, or "" to disable
+  },
 })
 ```
 

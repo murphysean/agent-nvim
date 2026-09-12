@@ -134,22 +134,133 @@ DISPLAY OPTIONS:~
 
 The chat is terse by default: thinking/reasoning is hidden, agent messages
 are rendered as markdown (headings, bold, inline code, and syntax-highlighted
-fenced code blocks), and no emoji prefixes are shown. Tool calls collapse to
-a single updating line. Configure via |agent-nvim-setup|:
+fenced code blocks), and no emoji prefixes are shown. Configure via
+|agent-nvim-setup|:
 
     setup({
       chat = {
         show_thinking = false,  -- show agent reasoning messages
         markdown = true,        -- treesitter markdown highlighting
         emoji = false,          -- emoji icons on status/tool/plan lines
+        tool_cards = true,      -- ruled cards with arrows
+        tool_preview_lines = 3, -- result lines shown inside a card
+        card_arrows = true,     -- show the direction arrows
+        rule_width = 40,        -- rule length in characters
+        rule_indent = 2,        -- indent before each rule
+        rule_char = "─",        -- rule character, "" disables
+        prompt_gutter = "│",    -- gutter bar on your prompt
+        step_separator = "─",   -- rule between turns and steps; "" disables
+        live_markdown = true,   -- re-highlight while streaming
       },
     })
+
+LINE CATEGORIES:~
+
+Each kind of line has its own highlight group so the transcript is scannable.
+The groups are linked to standard ones, so they follow your colorscheme:
+
+    AgentNvimMeta        status/meta lines      -> Comment
+    AgentNvimUser        your prompt            -> Title
+    AgentNvimToolCall    "Tool Call:" lines     -> Function
+    AgentNvimToolResult  "Tool Result:" lines   -> Comment
+    AgentNvimToolError   failed results         -> DiagnosticError
+    AgentNvimSeparator   the step rule          -> NonText
+
+Define any of them yourself to override — your definition always wins:
+
+    vim.api.nvim_set_hl(0, "AgentNvimUser", { link = "DiagnosticInfo" })
+
+STREAMING:~
+
+Agent text is written to the buffer raw as chunks arrive and markdown is
+applied on top of it via extmarks, so the highlighting can be recomputed in
+place without altering the text.
+
+By default the message is re-highlighted as it streams (throttled). Set
+|live_markdown = false| to leave the text raw while it arrives and apply
+markdown once when the message is complete.
 
 Setting |markdown = false| restores the legacy emoji-prefixed, plain-text
 streaming. Setting |emoji = true| adds emoji icons to status, plan, and tool
 lines (the message body stays raw markdown when markdown is enabled).
 
-==============================================================================
+TOOL CALL OUTPUT:~
+
+Each batch of tool calls renders as a ruled card, with ▸ marking calls going
+out to a tool and ◂ marking results coming back (mirroring goose CLI):
+
+    ─────────────────────────────────────────────────────
+      ▸ read_file (path: src/main.rs, lines: 12-40)
+      ▸ run (command: cargo test)
+      ◂ run (result: exit_code: 0, stdout: test result: ok.)
+        test result: ok. 412 passed
+        running 412 tests
+        ... (3 more lines)
+      ◂ read_file (result: File: src/main.rs (562 lines total))
+        File: src/main.rs (562 lines total)
+          12	fn main() {
+        ... (2 more lines)
+    ─────────────────────────────────────────────────────
+
+Calls issued together share one card — they are one batch of the agent's loop
+— and their results append inside it as they arrive, so a batch completing out
+of order still reads correctly. The closing rule is drawn once every call in
+the batch has reported, marking the block's full extent. Each line is its own
+jump target for |]b| and |[b|.
+
+Arguments are summarized onto one line, preferring the key that identifies
+what the call touches (`path`, `command`, `query`, ...) and skipping
+source-text arguments such as `old_string` and `new_string`. Summaries and
+previews are clipped to the window's text width, so no line ever wraps.
+Failures render as `◂ tool (failed: <message>)`.
+
+Set |tool_cards = false| for plain `Tool Call:` / `Tool Result:` lines.
+
+LAYOUT, CARDS AND SEPARATORS:~
+
+The transcript is built from FIXED-WIDTH, indented rules: a constant 40
+characters indented by 2, not sized to the window. Resizing Neovim therefore
+never leaves mismatched or wrapped rules behind.
+
+      ────────────────────────────────────────
+    │ you:
+    │ Introduce yourself, then list the lua files.
+    I'm goose, an open-source AI agent by AAIF — let me look at that directory.
+      ────────────────────────────────────────
+      ▸ shell (command: ls -la lua/agent-nvim/chat/)
+      ◂ shell (result: total 8)
+        total 8
+        ... (4 more lines)
+      ────────────────────────────────────────
+    Here's what's there:
+      ────────────────────────────────────────
+    [turn end: end_turn]
+      ────────────────────────────────────────
+
+Rules mark the edges of each block:
+
+  - Your prompt opens a card, marked with a │ gutter bar so it never reads as
+    a continuation of the agent's prose. The bar is at a fixed column, so it
+    survives a resize.
+  - Each tool batch gets its own card, opened when the batch starts and closed
+    once every call in it has reported.
+  - The turn closes with a rule after the turn-end status line.
+
+The turn's reasoning and message sit between the prompt's card and the first
+tool card, which is why the agent's reply reads as belonging to your message.
+
+With |tool_cards = false| there are no tool cards, so a rule is instead drawn at
+each agent-loop step (a new assistant messageId), keeping the steps visible.
+
+    setup({
+      chat = {
+        rule_width = 40,       -- rule length in characters
+        rule_indent = 2,       -- indent before each rule
+        rule_char = "─",       -- rule character, "" disables rules
+        prompt_gutter = "│",   -- gutter bar on your prompt
+      },
+    })
+
 5. AI ASSIST                                                  *agent-nvim-assist*
 
 When a connected MCP client supports sampling, these keybindings activate:

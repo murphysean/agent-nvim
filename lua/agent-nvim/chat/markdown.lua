@@ -64,12 +64,21 @@ function M.apply(buf, start_row, end_row)
   -- markers (**, `, ...) so inline syntax reads cleanly.
   local ok_iq, iq = pcall(vim.treesitter.query.get, "markdown_inline", "highlights")
   if ok_iq and iq then
-    -- Each `inline` node's text is a substring of the block, so the sub-node
-    -- columns returned by parsing that text are relative to the inline node's
-    -- own start. We must shift them by the inline node's absolute start column
-    -- (from node:range()) — otherwise nested inline nodes (e.g. the content
-    -- inside **bold**) get their conceal/highlight extmarks placed at the wrong
-    -- columns, eating into or truncating adjacent text.
+    -- Each `inline` node's text is a substring of the block, so a sub-node's
+    -- columns come back relative to the inline node's own text. Convert them
+    -- back to absolute coordinates.
+    --
+    -- The inline node's text contains newlines, but a sub-node's column is a
+    -- byte offset INTO ITS OWN LINE, not from the inline node's start. So the
+    -- inline start column may only be added for sub-nodes on the inline node's
+    -- FIRST line (isr == 0):
+    --
+    --   * inline starts at (row 0, col 20), sub-node at rel (0, 2) -> 22  OK
+    --   * inline starts at (row 0, col 20), sub-node at rel (1, 2) -> col 2
+    --     (adding 20 would shift the range right and conceal the wrong bytes)
+    --
+    -- Getting this wrong makes concealment run past its marker and delete
+    -- characters from the rendered text.
     local function inline(node)
       if node:type() == "inline" then
         local ir, ic = node:range()
@@ -82,20 +91,26 @@ function M.apply(buf, start_row, end_row)
             local nm = iq.captures[iid]
             if nm and nm:sub(1, 1) ~= "_" then
               local isr, isc, ier, iec = inode:range()
-              local col = ic + isc
-              local end_col = ic + iec
-              if nm == "conceal" then
-                vim.api.nvim_buf_set_extmark(buf, NS, start_row + ir + isr, col, {
-                  end_row = start_row + ir + ier,
-                  end_col = end_col,
-                  conceal = "",
-                })
-              else
-                vim.api.nvim_buf_set_extmark(buf, NS, start_row + ir + isr, col, {
-                  end_row = start_row + ir + ier,
-                  end_col = end_col,
-                  hl_group = "@" .. nm,
-                })
+              local col = isr == 0 and (ic + isc) or isc
+              local end_col = ier == 0 and (ic + iec) or iec
+              local row = start_row + ir + isr
+              local end_row = start_row + ir + ier
+              -- A range that crosses lines is not a delimiter; skip it rather
+              -- than letting it span text it does not own.
+              if row == end_row and end_col > col then
+                if nm == "conceal" then
+                  vim.api.nvim_buf_set_extmark(buf, NS, row, col, {
+                    end_row = end_row,
+                    end_col = end_col,
+                    conceal = "",
+                  })
+                else
+                  vim.api.nvim_buf_set_extmark(buf, NS, row, col, {
+                    end_row = end_row,
+                    end_col = end_col,
+                    hl_group = "@" .. nm,
+                  })
+                end
               end
             end
           end
